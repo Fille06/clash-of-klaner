@@ -5096,9 +5096,9 @@ function duelStatus(t){ const el = $('duelSt'); if (el) el.textContent = t; }
 function rcode(){ const a = 'abcdefghjkmnpqrstuvwxyz23456789'; let s = ''; for (let i = 0; i < 5; i++) s += a[(rnd()*a.length) | 0]; return s; }
 async function openDuel(){
   makeOv('duelOv', '⚔️ DUELL 1 MOT 1 ONLINE', 620); openOv('duelOv'); const b = $('duelOvBody');
-  b.innerHTML = '<div class="muted" style="text-align:left">Försvararen spelar i sin egen bas och terräng. Anfallaren kommer med sin armé. Båda styr soldater i 3D samtidigt och skjuter på varandra. 3 minuter. Spelet måste vara öppet på claude.ai hos båda, och motståndaren behöver ha fått spelet delat med sig med minst rätt att bidra.</div><div id="duelSt" class="sub" style="text-align:center">Ansluter …</div>';
+  b.innerHTML = '<div class="muted" style="text-align:left">Försvararen spelar i sin egen bas och terräng. Anfallaren kommer med sin armé. Båda styr soldater i 3D samtidigt och skjuter på varandra. 3 minuter. Skapa en match och skicka koden eller länken till din motståndare. På claude.ai behöver motståndaren ha fått spelet delat med sig.</div><div id="duelSt" class="sub" style="text-align:center">Ansluter …</div>';
   const R = await duelRoom();
-  if (!R){ duelStatus('Duell går bara när spelet är öppnat som publicerad sida på claude.ai (inte i förhandsvisningen).'); return; }
+  if (!R){ duelStatus('Kunde inte nå duellservern – kolla internetanslutningen och försök igen.'); return; }
   duelStatus(R.connected() ? 'Ansluten' : 'Ansluter …');
   const row = document.createElement('div'); row.className = 'row'; b.appendChild(row);
   const host = document.createElement('button'); host.className = 'b big'; host.innerHTML = '🛡️ SKAPA MATCH<br><small>försvara min bas</small>'; row.appendChild(host);
@@ -5115,6 +5115,8 @@ async function duelHost(){
   try { DUEL.r = await R.join('duel-' + DUEL.code); } catch (e){ duelStatus('Kunde inte skapa matchen (' + (e && e.code || 'fel') + ')'); return; }
   duelWire(); DUEL.r.presence({ role: 'def' }).catch(() => {}); R.presence({ duel: DUEL.code, th: thLvl() }).catch(() => {});
   duelStatus('Matchkod: ' + DUEL.code.toUpperCase() + ' – väntar på en anfallare …'); beep(700, .08, 'triangle', .05);
+  if (R.p2p && $('duelOvBody') && !$('duelLinkRow')){ const row = document.createElement('div'); row.id = 'duelLinkRow'; row.className = 'row'; row.innerHTML = '<input readonly style="flex:1;min-width:0;font:600 13px system-ui;padding:8px;border-radius:10px"><button class="b">📋 KOPIERA LÄNK</button>'; const inp = row.querySelector('input'), bt = row.querySelector('button'); $('duelOvBody').appendChild(row); inp.value = duelLink(DUEL.code); bt.onclick = () => { (navigator.clipboard ? navigator.clipboard.writeText(inp.value) : Promise.reject()).then(() => toast('Länken är kopierad – skicka den till din motståndare', '#7fe08a'), () => { inp.select(); document.execCommand('copy'); }); }; }
+  else if ($('duelLinkRow')) $('duelLinkRow').querySelector('input').value = duelLink(DUEL.code);
 }
 async function duelJoin(code){
   const R = await duelRoom(); if (!R) return;
@@ -5311,6 +5313,64 @@ function gl3Pose(e, o, moving, shooting){
   if (e.flash) e.flash.visible = k > 3;
 }
 function soldDie(c){ if (!c.mx) return; c.mx.stopAllAction(); if (c.act.Death){ c.act.Death.reset().play(); c.cur = c.act.Death; } }
+// ======================================================================
+// DUELL UTANFÖR CLAUDE.AI – direktkoppling mellan spelarna (WebRTC) via PeerJS och dess gratis
+// kopplingsserver. Samma gränssnitt som claude.ai-rummet (join, emit, on, presence, onPeers, leave),
+// så resten av duellkoden är densamma. Försvararen får id "clashklaner-<kod>", anfallaren kopplar upp sig mot det.
+// ======================================================================
+const P2P = { pre: 'clashklaner-' };
+function p2pLib(){
+  if (window.Peer) return Promise.resolve(true);
+  if (!P2P.libP) P2P.libP = new Promise(r => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js'; s.onload = () => r(!!window.Peer); s.onerror = () => r(false); document.head.appendChild(s); });
+  return P2P.libP;
+}
+function p2pLobby(){
+  const lob = { p2p: true, connected: () => true, peers: () => [], onPeers: () => () => {}, presence: () => Promise.resolve() };
+  lob.join = name => new Promise((ok, bad) => {
+    const code = String(name).replace(/^duel-/, ''), host = DUEL.role === 'def';
+    const hs = {}, peerFns = new Set(); let conn = null, me = {}, opp = null, done = false;
+    const peer = new Peer(host ? P2P.pre + code : undefined, { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:global.stun.twilio.com:3478' }] } });
+    const list = () => { const ps = [{ peer: 'me', isMe: true, presence: me }]; if (conn && conn.open) ps.push({ peer: 'opp', isMe: false, presence: opp }); return ps; };
+    const fire = () => { const ch = { peers: list() }; for (const f of peerFns) try { f(ch); } catch (e){ console.warn(e); } };
+    const wire = c => {
+      conn = c;
+      c.on('open', () => { c.send({ t: '_p', d: me }); fire(); });
+      c.on('data', m => { if (!m || typeof m !== 'object') return; if (m.t === '_p'){ opp = m.d || {}; fire(); return; } const set = hs[m.t]; if (set) for (const f of set) try { f({ data: m.d, isMe: false }); } catch (e){ console.warn(e); } });
+      c.on('close', () => { if (conn === c){ conn = null; opp = null; fire(); } });
+      c.on('error', e => console.warn('Duell-kopplingen:', e));
+    };
+    const room = {
+      emit: (t, d) => { if (conn && conn.open) try { conn.send({ t, d }); } catch (_){ } return Promise.resolve(); },
+      on: (t, f) => { (hs[t] = hs[t] || new Set()).add(f); return () => hs[t].delete(f); },
+      presence: patch => { Object.assign(me, patch); if (conn && conn.open) try { conn.send({ t: '_p', d: me }); } catch (_){ } return Promise.resolve(); },
+      onPeers: f => { peerFns.add(f); return () => peerFns.delete(f); },
+      peers: list, connected: () => !!(conn && conn.open),
+      leave: () => { try { if (conn) conn.close(); peer.destroy(); } catch (_){ } return Promise.resolve(); },
+    };
+    peer.on('open', () => {
+      if (host){ peer.on('connection', c => { if (conn && conn.open){ c.on('open', () => c.close()); return; } wire(c); }); done = true; ok(room); }
+      else { const c = peer.connect(P2P.pre + code, { reliable: true, serialization: 'json' }); wire(c); done = true; ok(room); }
+    });
+    peer.on('error', e => { const t = e && e.type; if (!done){ done = true; bad({ code: t === 'unavailable-id' ? 'koden är upptagen' : t === 'peer-unavailable' ? 'hittar ingen match med den koden' : t || 'nätverk' }); }
+      else if (t === 'peer-unavailable') duelStatus('Hittar ingen match med koden ' + code.toUpperCase() + ' – kolla koden och att försvararen väntar.'); else console.warn('PeerJS:', e); });
+    peer.on('disconnected', () => { try { peer.reconnect(); } catch (_){ } });
+  });
+  return lob;
+}
+async function duelRoom(){
+  if (DUEL.R) return DUEL.R;
+  try { DUEL.R = window.claude && window.claude.use ? await window.claude.use('room') : null; } catch (_){ DUEL.R = null; }
+  if (!DUEL.R && await p2pLib()) DUEL.R = p2pLobby();
+  return DUEL.R;
+}
+function duelLink(code){ return location.origin + location.pathname + '#duel=' + code; }
+// länk med #duel=<kod> öppnar duellen och går med direkt
+setTimeout(function duelFromHash(){
+  const m = /#duel=([a-z0-9]{3,8})/i.exec(location.hash || ''); if (!m) return;
+  if (typeof openDuel !== 'function' || !$('kDuel')){ if (!duelFromHash.n || duelFromHash.n++ < 20){ duelFromHash.n = duelFromHash.n || 1; setTimeout(duelFromHash, 500); } return; }
+  history.replaceState(null, '', location.pathname + location.search);
+  openDuel().then(() => { const i = $('duelCode'); if (i) i.value = m[1].toLowerCase(); duelJoin(m[1].toLowerCase()); });
+}, 1500);
 // återställ fältet när man går ur
 const _showMenu = showMenu;
 showMenu = function(){ setTimeout(lobbyBtns, 0); exitFps(true); if (mode === 'v3d') v3Stop(); if (mode === 'terrain') terDone(); mode = 'village'; place = null; moveB = null; bar.classList.remove('on'); panel.style.display = 'none'; tbar.style.display = 'none'; _showMenu(); };
