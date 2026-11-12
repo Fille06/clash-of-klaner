@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Clash of Klaner – PvP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/hud.css">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/",
+  "rapier": "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.14.0/+esm"
+} }
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud" class="hidden"></div>
+<div id="menu"></div>
+<div id="load"><div class="lt">CLASH OF KLANER</div><div class="lb"><i id="lbar"></i></div><div id="lmsg">Laddar…</div></div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
