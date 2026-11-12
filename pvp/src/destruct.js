@@ -40,7 +40,7 @@ function mats(){
     soft: pbr('plaster_grey_04', { tri: 2.5, color: 0xa49c90 }),
     slab: pbr('concrete_floor_worn_001', { tri: 3 }),
     col: pbr('concrete_floor_worn_001', { tri: 2.5, color: 0xb0aca6 }),
-    glass: new THREE.MeshStandardMaterial({ color: 0x2b3440, roughness: .07, metalness: .8, transparent: true, opacity: .82, envMapIntensity: 2.1 }),
+    glass: new THREE.MeshStandardMaterial({ color: 0x7e90a2, roughness: .04, metalness: .92, transparent: true, opacity: .9, envMapIntensity: 1.9 }),
     frame: new THREE.MeshStandardMaterial({ color: 0x252b33, roughness: .32, metalness: .85, envMapIntensity: 1.3 }),
     gate: pbr('metal_plate', { tri: 1.5, metal: .8, color: 0x7a8274 }),
     sand: sandMat(),

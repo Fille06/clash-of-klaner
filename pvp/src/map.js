@@ -18,11 +18,12 @@ function staticBox(w, h, d, x, y, z, mat, ry){
 function facadeTex(seed, kind){
   const c = document.createElement('canvas'); c.width = 256; c.height = 512; const x = c.getContext('2d'), g = document.createElement('canvas'); g.width = 256; g.height = 512; const y = g.getContext('2d');
   let s = seed; const r = () => (s = (s*16807) % 2147483647)/2147483647;
-  const glass = kind === 0 ? [22, 30, 40] : kind === 1 ? [40, 46, 50] : [26, 34, 34], band = kind === 1 ? '#9a9a94' : '#8a9096';
+  // glaset är ljust: fasaderna är metalliska, så grundfärgen färgar speglingen (mörkt glas speglade nästan svart)
+  const glass = kind === 0 ? [118, 140, 162] : kind === 1 ? [140, 146, 150] : [112, 138, 140], band = kind === 1 ? '#b4b2ac' : '#8a9096';
   x.fillStyle = `rgb(${glass})`; x.fillRect(0, 0, 256, 512); y.fillStyle = '#202020'; y.fillRect(0, 0, 256, 512);
   for (let j = 0; j < 32; j++){
     x.fillStyle = band; x.fillRect(0, j*16, 256, kind === 1 ? 5 : 3); y.fillStyle = '#c0c0c0'; y.fillRect(0, j*16, 256, kind === 1 ? 5 : 3);
-    for (let i = 0; i < 16; i++){ const v = (r() - .5)*14, l = r() > .93; x.fillStyle = l ? 'rgb(150,140,110)' : `rgb(${glass[0] + v},${glass[1] + v},${glass[2] + v})`; x.fillRect(i*16 + 1, j*16 + (kind === 1 ? 6 : 4), 14, kind === 1 ? 9 : 11); }
+    for (let i = 0; i < 16; i++){ const v = (r() - .5)*14, l = r() > .93; x.fillStyle = l ? 'rgb(210,196,150)' : `rgb(${glass[0] + v*2},${glass[1] + v*2},${glass[2] + v*2})`; x.fillRect(i*16 + 1, j*16 + (kind === 1 ? 6 : 4), 14, kind === 1 ? 9 : 11); }
     x.fillStyle = band; for (let i = 0; i <= 16; i++) x.fillRect(i*16, j*16, 1, 16);
   }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8;
@@ -138,7 +139,7 @@ export function buildTraining(){
     let y = 0, ww = w, dd = d; const steps = 1 + Math.floor(rr()*3);
     for (let s = 0; s < steps; s++){
       const hh = s === steps - 1 ? h - y : h*(.45 + rr()*.25)/(s + 1), mt = ft.clone(), mr = rt.clone(); mt.needsUpdate = mr.needsUpdate = true; mt.repeat.set(ww/40, hh/80); mr.repeat.copy(mt.repeat);
-      const m = new THREE.Mesh(new THREE.BoxGeometry(ww, hh, dd), new THREE.MeshStandardMaterial({ map: mt, roughnessMap: mr, roughness: 1, metalness: k === 1 ? .25 : .85, envMapIntensity: 1.25, color: 0x7a848c }));
+      const m = new THREE.Mesh(new THREE.BoxGeometry(ww, hh, dd), new THREE.MeshStandardMaterial({ map: mt, roughnessMap: mr, roughness: 1, metalness: k === 1 ? .55 : .92, envMapIntensity: 1.5, color: 0xffffff }));
       m.position.y = y + hh/2; m.castShadow = true; grp.add(m); y += hh; ww *= .78; dd *= .78; if (y >= h - 1) break;
     }
     const roof = new THREE.MeshStandardMaterial({ color: 0x4a4e52, roughness: .7, metalness: .4 });
