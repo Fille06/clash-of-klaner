@@ -192,7 +192,7 @@ export function updateBuilder(dt){
   if (BD.ring.visible){ const p = BD.ring.geometry.attributes.position; for (let i = 0; i <= 64; i++){ const a = i/64*6.283, x = BD.hover.x + Math.cos(a)*BD.rad, z = BD.hover.z + Math.sin(a)*BD.rad; p.setXYZ(i, x, Math.max(hAt(x, z), T.sea) + .15, z); } p.needsUpdate = true; BD.ring.material.color.set(BD.sel === 'vatten' ? 0x50b0ff : BD.sel === 'skog' ? 0x70ff70 : BD.sel === 'roj' || BD.sel === 'radera' ? 0xff9050 : 0xffd060); }
   // siktsektorer: alla när man ställer in, det valda starkare
   for (const it of BD.items) if (it.def && it.def.fan){ defShowFan(it.def, BD.sel === 'edit' || !!GUNS[BD.sel]); it.def.fan.material.opacity = BD.edit === it ? .2 : .06; }
-  const g = BD.ghost; g.visible = !!BD.hover && !tool && BD.sel !== 'del';
+  const g = BD.ghost; g.visible = !!BD.hover && !tool && !!CATALOG[BD.sel];
   if (g.visible){ const c = CATALOG[BD.sel], [w, d] = dims(BD.sel, BD.rot), h = c.spec.floors*c.spec.fh*c.spec.c, [sx, sz] = snap(BD.sel, BD.rot, BD.hover), bad = overlaps(BD.sel, sx, sz, BD.rot) || used() + c.cost > BD.budget || footWater(sx, sz, w, d) > .35, y = Math.max(footHeight(sx, sz, w, d), T.sea + .3);
     g.scale.set(w, h, d); g.position.set(sx, y + h/2, sz); g.material.color.set(bad ? 0xff5040 : 0x4dffa0); }
 }
