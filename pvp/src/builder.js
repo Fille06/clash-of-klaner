@@ -107,13 +107,14 @@ export function startBuilder(base){
   if (!BD.ring){ BD.ring = new THREE.Line(new THREE.BufferGeometry().setFromPoints(Array.from({ length: 65 }, () => new THREE.Vector3())), new THREE.LineBasicMaterial({ color: 0xffd060, depthTest: false, transparent: true })); BD.ring.renderOrder = 20; }
   E.scene.add(BD.ghost); E.scene.add(BD.ring); ui();
 }
+BD.refresh = () => ui();
 export function stopBuilder(){ BD.on = false; BD.paint = false; T.grid = false; const u = document.getElementById('bui'); if (u) u.remove(); }
 export const currentBase = () => ({ items: plain(BD.items), ter: terSave() });
 // gränssnitt: palett (byggnader + markverktyg), mallar, poäng, platser, baskod
 function ui(){
   let u = document.getElementById('bui'); if (!u){ u = document.createElement('div'); u.id = 'bui'; document.body.appendChild(u); }
   const sl = loadSlots(), hq = BD.items.some(i => i.t === 'hq');
-  u.innerHTML = `<div class="bt">BASBYGGAREN <small>BYGGPOÄNG ${used()} / ${BD.budget}</small> <small style="color:${hq ? 'var(--gr)' : 'var(--or)'}">${hq ? '✓ HÖGKVARTER PLACERAT' : '! PLACERA ETT HÖGKVARTER'}</small></div>
+  u.innerHTML = `<div class="bt">BASBYGGAREN <small>BYGGPOÄNG ${used()} / ${BD.budget >= 99999 ? '∞' : BD.budget}</small> <small style="color:${hq ? 'var(--gr)' : 'var(--or)'}">${hq ? '✓ HÖGKVARTER PLACERAT' : '! PLACERA ETT HÖGKVARTER'}</small></div>
   <div class="bu"><span class="bb" data-undo="1" style="opacity:${BD.undo.length ? 1 : .4}">↶ ÅNGRA</span><span class="bb" data-redo="1" style="opacity:${BD.redo.length ? 1 : .4}">↷ GÖR OM</span><span class="bb" data-clear="1">⌫ RENSA MARKEN</span></div>
   <div class="bw">
   <div class="bm"><span class="bl">MARK</span>${Object.entries(TOOLS).map(([k, n]) => `<div class="bi sm ${BD.sel === k ? 'on' : ''}" data-k="${k}">${n}</div>`).join('')}<span class="bl">PENSEL ${BD.rad} M</span><span class="bl">MALL</span>${Object.entries(PRESETS).map(([k, n]) => `<span class="bb" data-pre="${k}">${n}</span>`).join('')}</div>
@@ -121,7 +122,7 @@ function ui(){
   <div class="bp">${Object.entries(CATALOG).filter(([k, c]) => !c.def).map(([k, c]) => `<div class="bi ${BD.sel === k ? 'on' : ''}" data-k="${k}">${c.name}<small>${c.cost} P · ${c.spec.w}×${c.spec.d} M</small></div>`).join('')}<div class="bi ${BD.sel === 'del' ? 'on' : ''}" data-k="del">RIV<small>ta bort byggnad</small></div></div>
   <div class="bs">${sl.map((s, i) => `<span class="bb" data-save="${i}">SPARA ${i + 1}</span><span class="bb" data-load="${i}" style="opacity:${s ? 1 : .35}">LADDA ${i + 1}</span>`).join('')}
     <span class="bb" data-code="1">BASKOD</span><span class="bb" data-test="1" style="opacity:${hq ? 1 : .35}">TESTA BASEN ›</span><span class="bb" data-menu="1">‹ MENY</span></div>
-  <div class="bh">${isTool(BD.sel) ? 'HÅLL VÄNSTER MÅLA · [ ] ELLER SHIFT+HJUL PENSELSTORLEK · CTRL+Z ÅNGRA' : 'KLICK BYGG · R VRID · HÖGERDRA VRID KAMERA · HJUL ZOOM · WASD FLYTTA · 0–9 VÄLJ · CTRL+Z ÅNGRA'}</div></div>${editPanel()}<div class="bc" id="bcode"></div>`;
+  <div class="bh">${isTool(BD.sel) ? 'HÅLL VÄNSTER MÅLA · [ ] ELLER SHIFT+HJUL PENSELSTORLEK · CTRL+Z ÅNGRA' : 'KLICK BYGG · R VRID · HÖGERDRA VRID KAMERA · HJUL ZOOM · WASD FLYTTA · 1–9 VÄLJ · DELETE RIV VALT · 0 UTVECKLARLÄGE · CTRL+Z ÅNGRA'}</div></div>${editPanel()}<div class="bc" id="bcode"></div>`;
   u.querySelectorAll('.bi').forEach(el => el.onclick = e => { e.stopPropagation(); BD.sel = el.dataset.k; ui(); });
   u.querySelectorAll('[data-pre]').forEach(el => el.onclick = () => { pushUndo(); terPreset(el.dataset.pre); refreshObjs(); edgeLine(); flash('Mall: ' + PRESETS[el.dataset.pre]); });
   u.querySelectorAll('[data-set]').forEach(el => el.onclick = () => { const it = BD.edit; if (!it) return; pushUndo(); const [k, v] = el.dataset.set.split(':'); if (k === 'dir') it.dir = ((it.dir || 0) + +v + 360) % 360; else it[k] = k === 'sec' ? +v : v; defRefreshFan(it.def); ui(); });
@@ -158,7 +159,7 @@ export function bindBuilder(canvas){
     if (e.code === 'KeyR') BD.rot = (BD.rot + 1) % 4;
     if (e.code === 'BracketLeft' || e.code === 'BracketRight'){ BD.rad = Math.max(2, Math.min(20, BD.rad + (e.code === 'BracketRight' ? 1 : -1))); ui(); }
     if ((e.code === 'Delete' || e.code === 'Backspace') && BD.edit){ const it = BD.edit; pushUndo(); disposeItem(it); BD.items.splice(BD.items.indexOf(it), 1); BD.edit = null; setFeet(); ui(); return; }
-    const n = +e.key; if (e.key >= '0' && e.key <= '9'){ BD.sel = ['del', 'hq', 'bunker', 'house', 'tower', 'barr', 'wall', 'wallb', 'port', 'mg'][n]; BD.edit = null; ui(); } });
+    const n = +e.key; if (e.key >= '1' && e.key <= '9'){ BD.sel = [null, 'hq', 'bunker', 'house', 'tower', 'barr', 'wall', 'wallb', 'port', 'mg'][n]; BD.edit = null; ui(); } });
   addEventListener('keyup', e => { BD.keys[e.code] = false; });
 }
 function snap(t, rot, p){ const [w, d] = dims(t, rot); return [Math.round(p.x - w/2) + w/2, Math.round(p.z - d/2) + d/2]; }

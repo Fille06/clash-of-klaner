@@ -88,3 +88,9 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0f12; fon
 #bui .bf { position: absolute; left: 50%; bottom: 112px; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; pointer-events: auto; white-space: nowrap; }
 #bui .be { position: absolute; right: 24px; top: 140px; width: 300px; pointer-events: auto; background: linear-gradient(180deg, rgba(10,22,30,.8), rgba(6,12,16,.88)); border: 1px solid var(--ln); padding: 12px; }
 #bui .be h3 { margin: 0 0 8px; font-size: 18px; letter-spacing: .14em; } #bui .be .row { margin: 8px 0 4px; font-size: 11px; letter-spacing: .14em; opacity: .7; } #bui .be .bb.on { border-color: var(--cy); background: rgba(63,200,255,.25); }
+
+/* utvecklarläge */
+#devb { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 40; pointer-events: none; padding: 5px 14px; border: 1px solid #ffb02e; background: rgba(40,24,0,.78); color: #ffc75a; font: 700 14px Rajdhani, system-ui, sans-serif; letter-spacing: .18em; text-align: center; text-shadow: 0 0 4px rgba(0,0,0,.9); }
+#devb small { display: block; font-size: 10px; letter-spacing: .12em; opacity: .85; }
+#devt { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 41; pointer-events: none; padding: 8px 18px; background: rgba(10,10,10,.82); border: 1px solid #ffb02e; color: #fff; font: 700 16px Rajdhani, system-ui, sans-serif; letter-spacing: .14em; opacity: 0; transition: opacity .25s; }
+#devt.show { opacity: 1; }

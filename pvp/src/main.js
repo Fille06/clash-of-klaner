@@ -12,6 +12,7 @@ import { W, markPersistent, resetWorld } from './world.js';
 import { BD, startBuilder, stopBuilder, bindBuilder, updateBuilder, loadSlots, buildPlot, rebuild, normBase } from './builder.js';
 import { T, terPhysics, terUpdate, hAt } from './terrain.js';
 import { DEF, defStart, defStop, updateDefense } from './defense.js';
+import { DEV, devTick, bindDev, setDev } from './dev.js';
 
 const G = window.G = { state: 'menu', E, PL, DS, MAP, fx, THREE, T };
 const $ = id => document.getElementById(id);
@@ -23,7 +24,7 @@ async function boot(){
     bar(.3, 'Startar fysiken'); await initPhysics();
     bar(.5, 'Laddar himmel och ljus'); await loadSky('kloofendal_48d_partly_cloudy_puresky_2k.hdr');
     bar(.7, 'Bygger kartan'); initFx(); markPersistent(); buildTraining(); W.map = 'training';
-    bar(.95, 'Klart'); bindInput($('c')); bindBuilder($('c'));
+    bar(.95, 'Klart'); bindInput($('c')); bindBuilder($('c')); bindDev();
     BD.onMenu = () => { stopBuilder(); menu('main'); }; BD.onTest = base => testBase(base);
     DEF.onKill = d => { hudFeed('Du', { gun: d.g && d.g.name, mine: 'MINA', wire: 'TAGGTRÅD' }[d.kind] || 'FÖRSVAR', d.kind === 'mine' ? 'MINA' : 'AK-12'); if (d.kind === 'gun') hudPoints(150, 'FÖRSVAR FÖRSTÖRT'); };
     DS.onCollapse = (b, n) => { sfx.rumble(); hudFeed('Du', 'HÖGHUSET', 'RAS'); hudPoints(500, 'BYGGNAD FÖRSTÖRD'); };
@@ -50,7 +51,7 @@ function menu(k){
   G.state = 'menu'; defStop(); PL.on = false; $('hud').classList.add('hidden'); if (document.pointerLockElement) document.exitPointerLock();
   const m = $('menu'); m.classList.remove('hidden');
   m.innerHTML = `<div class="logo">CLASH OF KLANER<small>SPELARE MOT SPELARE</small></div><div class="list">${MENUS[k].map((it, i) => `<div class="it ${it[2] ? '' : 'dis'}" data-i="${i}">${it[0]}<small>${it[1]}</small></div>`).join('')}</div>
-    <div class="info">ÖPPEN BETA · FÖRSTÖRELSE · RAPIER-FYSIK · THREE.JS</div>`;
+    <div class="info">ÖPPEN BETA · FÖRSTÖRELSE · RAPIER-FYSIK · THREE.JS · TRYCK 0 FÖR UTVECKLARLÄGE</div>`;
   m.querySelectorAll('.it').forEach(el => el.onclick = () => { audioOn(); const f = MENUS[k][+el.dataset.i][2]; if (f) f(); });
 }
 function start(){
@@ -72,12 +73,13 @@ function loop(now){
 G.run = (sec, dt = 1/60) => { const t0 = performance.now(); for (let i = 0; i < sec/dt; i++) frame(dt, i < sec/dt - 1); return Math.round(performance.now() - t0); };
 // test: spara bilden till tester/shots/<namn>.jpg via servern i Blender
 G.shot = async (name) => { G.run(.02); const c = $('c'), o = document.createElement('canvas'); o.width = 960; o.height = Math.round(960*c.height/c.width); o.getContext('2d').drawImage(c, 0, 0, o.width, o.height); const r = await fetch('/save?name=' + name, { method: 'POST', body: o.toDataURL('image/jpeg', .85) }); return r.status; };
-G.DEF = DEF; G.build = build; G.BD = BD; G.testBase = b => testBase(b); G.start = (k) => { document.querySelector('.it').click(); [...document.querySelectorAll('.it')][k || 2].click(); };
+G.DEF = DEF; G.DEV = DEV; G.dev = setDev; G.build = build; G.BD = BD; G.testBase = b => testBase(b); G.start = (k) => { document.querySelector('.it').click(); [...document.querySelectorAll('.it')][k || 2].click(); };
 G.tp = (x, z, yaw, pitch) => { PL.body.setTranslation({ x, y: 1.2, z }, true); PL.yaw = yaw || 0; PL.pitch = pitch || 0; };
 function frame(dt, skipDraw){
   if (G.state === 'menu' && W.map === 'training'){ // långsam kameraåkning runt höghuset bakom menyn
     menuA += dt*.05; E.cam.position.set(Math.sin(menuA)*52, 9 + Math.sin(menuA*.7)*3, -34 + Math.cos(menuA)*52); E.cam.lookAt(0, 14, -34); followSun(E.cam.position);
   }
+  devTick();
   if (G.state === 'build') updateBuilder(dt);
   updatePlayer(dt); stepPhysics(dt); updateDestruct(dt); updateFx(dt); terUpdate(dt); updateDefense(dt); updateHud(dt); if (!skipDraw) render(dt);
   if (dt > 0) G.fps = (G.fps || 60)*.95 + (1/dt)*.05;
