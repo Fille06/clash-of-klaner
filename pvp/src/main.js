@@ -13,6 +13,7 @@ import { BD, startBuilder, stopBuilder, bindBuilder, updateBuilder, loadSlots, b
 import { T, terPhysics, terUpdate, hAt } from './terrain.js';
 import { DEF, defStart, defStop, updateDefense } from './defense.js';
 import { DEV, devTick, bindDev, setDev } from './dev.js';
+import { updateProps } from './props.js';
 
 const G = window.G = { state: 'menu', E, PL, DS, MAP, fx, THREE, T };
 const $ = id => document.getElementById(id);
@@ -81,7 +82,7 @@ function frame(dt, skipDraw){
   }
   devTick();
   if (G.state === 'build') updateBuilder(dt);
-  updatePlayer(dt); stepPhysics(dt); updateDestruct(dt); updateFx(dt); terUpdate(dt); updateDefense(dt); updateHud(dt); if (!skipDraw) render(dt);
+  updatePlayer(dt); stepPhysics(dt); updateDestruct(dt); updateFx(dt); terUpdate(dt); updateDefense(dt); updateProps(dt); updateHud(dt); if (!skipDraw) render(dt);
   if (dt > 0) G.fps = (G.fps || 60)*.95 + (1/dt)*.05;
 }
 boot();

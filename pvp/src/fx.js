@@ -50,7 +50,7 @@ export function initFx(){
 export { FX };
 export function P(t, x, y, z, o){
   if (FX.P.length >= FX.max) return;
-  FX.P.push(Object.assign({ t, x, y, z, vx: 0, vy: 0, vz: 0, age: 0, life: 1, s0: .5, s1: 1, r: Math.random()*6.28, vr: (Math.random() - .5)*.6, f: t === 1 ? 2 : t === 2 ? 3 : t === 5 ? 3 : Math.random() < .5 ? 0 : 1, a: 1, g: 0, drag: .5,
+  FX.P.push(Object.assign({ t, x, y, z, vx: 0, vy: 0, vz: 0, age: 0, life: 1, s0: .5, s1: 1, r: Math.random()*6.28, vr: (Math.random() - .5)*.6, f: t === 1 ? 2 : t === 2 ? 2 : t === 5 ? 3 : Math.random() < .5 ? 0 : 1, a: 1, g: 0, drag: .5,
     add: t === 1 || t === 2, c0: col('#ffffff'), c1: col('#ffffff'), wind: t === 0 ? 1 : t === 3 ? .5 : 0 }, o));
 }
 const rnd = (a, b) => a + Math.random()*(b - a);
@@ -58,25 +58,25 @@ export const fx = {
   fire(x, y, z, k){ P(1, x + rnd(-.3, .3)*k, y, z + rnd(-.3, .3)*k, { vy: rnd(1.5, 3), vx: rnd(-.3, .3), vz: rnd(-.3, .3), life: rnd(.4, .8), s0: rnd(.8, 1.4)*k, s1: .25*k, vr: 0, c0: col('#ffe08a'), c1: col('#d8300a'), drag: .2 }); },
   smoke(x, y, z, k, dark){ P(0, x + rnd(-.5, .5)*k, y, z + rnd(-.5, .5)*k, { vy: rnd(.8, 1.6), vx: rnd(-.3, .3), vz: rnd(-.3, .3), life: rnd(4, 8), s0: k, s1: k*rnd(4, 6), a: dark ? .8 : .55, c0: col(dark ? '#2a2724' : '#6e6a64'), c1: col(dark ? '#5a5650' : '#a4a098'), drag: .35 }); },
   dust(x, y, z, k, n){ for (let i = 0; i < (n || 4); i++) P(3, x, y, z, { vx: rnd(-1, 1)*k, vz: rnd(-1, 1)*k, vy: rnd(.2, 1.2)*k, g: 1.2, life: rnd(1, 2.4), s0: .3*k, s1: 1.6*k, a: .65, c0: col('#9a9184'), c1: col('#b8b2a6'), drag: 1.8 }); },
-  chips(x, y, z, nx, ny, nz, n, c){ for (let i = 0; i < n; i++) P(5, x, y, z, { vx: nx*rnd(1, 4) + rnd(-1.5, 1.5), vy: ny*rnd(1, 4) + rnd(0, 2.5), vz: nz*rnd(1, 4) + rnd(-1.5, 1.5), g: 9.8, life: rnd(.5, 1.2), s0: rnd(.04, .09), s1: .04, a: 1, add: false, vr: rnd(-8, 8), c0: col(c || '#8a857c'), c1: col(c || '#8a857c'), drag: .4 }); },
-  sparks(x, y, z, nx, ny, nz, n){ for (let i = 0; i < n; i++) P(2, x, y, z, { vx: nx*rnd(1, 5) + rnd(-2, 2), vy: ny*rnd(1, 5) + rnd(0, 3), vz: nz*rnd(1, 5) + rnd(-2, 2), g: 9.8, life: rnd(.15, .4), s0: .05, s1: .02, c0: col('#fff0b0'), c1: col('#ff7a20') }); },
-  glass(x, y, z, nx, nz, n, big){ for (let i = 0; i < n; i++) P(5, x + rnd(-.25, .25), y + rnd(-.25, .25), z + rnd(-.25, .25), { vx: nx*rnd(.5, 3) + rnd(-1, 1), vy: rnd(-.5, 2), vz: nz*rnd(.5, 3) + rnd(-1, 1), g: 9.8, life: rnd(.8, 1.6)*(big ? 2.4 : 1), s0: big ? rnd(.5, 1) : rnd(.05, .14), s1: big ? .3 : .05, a: big ? .9 : .75, add: !!big && Math.random() < .5, vr: rnd(-10, 10), c0: col(big ? '#e8f6ff' : '#cfe6f0'), c1: col('#9fc0d0'), drag: .2 }); },
+  chips(x, y, z, nx, ny, nz, n, c){ for (let i = 0; i < n; i++) P(5, x, y, z, { vx: nx*rnd(1, 4) + rnd(-1.5, 1.5), vy: ny*rnd(1, 4) + rnd(0, 2.5), vz: nz*rnd(1, 4) + rnd(-1.5, 1.5), g: 9.8, life: rnd(.6, 1.4), s0: rnd(.05, .12), s1: .05, a: 1, add: false, vr: rnd(-8, 8), c0: col(c || '#6e6860'), c1: col(c || '#6e6860'), drag: .4 }); },
+  sparks(x, y, z, nx, ny, nz, n){ for (let i = 0; i < n; i++) P(2, x, y, z, { vx: nx*rnd(1, 5) + rnd(-2, 2), vy: ny*rnd(1, 5) + rnd(0, 3), vz: nz*rnd(1, 5) + rnd(-2, 2), g: 9.8, life: rnd(.15, .45), s0: .07, s1: .015, c0: col('#ffc060'), c1: col('#c02800'), drag: .3 }); },
+  glass(x, y, z, nx, nz, n, big){ for (let i = 0; i < n; i++) P(5, x + rnd(-.25, .25), y + rnd(-.25, .25), z + rnd(-.25, .25), { vx: nx*rnd(.5, 3) + rnd(-1, 1), vy: rnd(-.5, 2), vz: nz*rnd(.5, 3) + rnd(-1, 1), g: 9.8, life: rnd(.8, 1.6)*(big ? 2.4 : 1), s0: big ? rnd(.5, 1) : rnd(.05, .14), s1: big ? .3 : .05, a: big ? .8 : .7, add: false, vr: rnd(-10, 10), c0: col(big ? '#7c8c96' : '#a8bcc6'), c1: col('#5a6a74'), drag: .2 }); },
   explosion(x, y, z, k){
-    for (let i = 0; i < 24*k*FX.rate; i++){ const a = Math.random()*6.283, s = rnd(2, 7)*k; P(1, x, y + .3, z, { vx: Math.cos(a)*s, vz: Math.sin(a)*s, vy: rnd(1, 6)*k, life: rnd(.3, .7), s0: rnd(1.4, 2.6)*k, s1: .4*k, f: Math.random() < .5 ? 3 : 2, c0: col('#fff2c0'), c1: col('#d0300a'), drag: 4 }); }
+    for (let i = 0; i < 24*k*FX.rate; i++){ const a = Math.random()*6.283, s = rnd(2, 7)*k; P(1, x, y + .3, z, { vx: Math.cos(a)*s, vz: Math.sin(a)*s, vy: rnd(1, 6)*k, life: rnd(.3, .7), s0: rnd(1.6, 3)*k, s1: .5*k, f: 2, c0: col('#ffd890'), c1: col('#b82a08'), drag: 4 }); }
     for (let i = 0; i < 16*k*FX.rate; i++){ const a = Math.random()*6.283, s = rnd(.5, 2.5)*k; P(0, x, y + .4, z, { vx: Math.cos(a)*s, vz: Math.sin(a)*s, vy: rnd(.6, 2.2), life: rnd(5, 9), s0: 1.6*k, s1: rnd(5, 8)*k, a: .7, c0: col('#3a3530'), c1: col('#8a857c'), drag: 1.4 }); }
-    for (let i = 0; i < 26*k*FX.rate; i++) P(2, x, y + .3, z, { vx: rnd(-8, 8)*k, vz: rnd(-8, 8)*k, vy: rnd(2, 9), g: 9.8, life: rnd(.6, 1.5), s0: .09, s1: .04, c0: col('#ffe08a'), c1: col('#ff5010'), drag: .6 });
+    for (let i = 0; i < 26*k*FX.rate; i++) P(2, x, y + .3, z, { vx: rnd(-8, 8)*k, vz: rnd(-8, 8)*k, vy: rnd(2, 9), g: 9.8, life: rnd(.4, 1.1), s0: .08, s1: .02, c0: col('#ffb048'), c1: col('#b02000'), drag: .6 });
     FX.light.position.set(x, y + 1.5, z); FX.light.intensity = 80*k; FX.lightT = .25;
   },
   // dammvägg när en byggnad rasar (BF4): tät, låg, sveper ut åt alla håll
   dustWall(x, y, z, r, k){
     // mörk kärna som väller uppåt
-    for (let i = 0; i < 60*FX.rate*k; i++){ const a = Math.random()*6.283, d = Math.random()*r*.5; P(0, x + Math.cos(a)*d, y + rnd(2, 18), z + Math.sin(a)*d, { vx: Math.cos(a)*rnd(.5, 2), vz: Math.sin(a)*rnd(.5, 2), vy: rnd(1.5, 5), life: rnd(10, 18), s0: rnd(5, 8), s1: rnd(16, 26), a: .7, c0: col('#3e3a35'), c1: col('#8a847a'), drag: .25 }); }
+    for (let i = 0; i < 60*FX.rate*k; i++){ const a = Math.random()*6.283, d = Math.random()*r*.5; P(0, x + Math.cos(a)*d, y + rnd(2, 18), z + Math.sin(a)*d, { vx: Math.cos(a)*rnd(.5, 2), vz: Math.sin(a)*rnd(.5, 2), vy: rnd(1.5, 5), life: rnd(10, 18), s0: rnd(5, 8), s1: rnd(16, 26), a: .7, c0: col('#262524'), c1: col('#5e5c5a'), drag: .25 }); }
     // ljus front som rullar ut längs gatan
-    for (let i = 0; i < 110*FX.rate*k; i++){ const a = Math.random()*6.283, d = r*.4 + Math.random()*r*.3, s = rnd(4, 10); P(0, x + Math.cos(a)*d, y + rnd(0, 3), z + Math.sin(a)*d, { vx: Math.cos(a)*s, vz: Math.sin(a)*s, vy: rnd(.1, 1.2), life: rnd(8, 14), s0: rnd(3, 5), s1: rnd(10, 16), a: .5, c0: col('#6a6256'), c1: col('#9e968a'), drag: .55 }); }
+    for (let i = 0; i < 110*FX.rate*k; i++){ const a = Math.random()*6.283, d = r*.4 + Math.random()*r*.3, s = rnd(4, 10); P(0, x + Math.cos(a)*d, y + rnd(0, 3), z + Math.sin(a)*d, { vx: Math.cos(a)*s, vz: Math.sin(a)*s, vy: rnd(.1, 1.2), life: rnd(8, 14), s0: rnd(3, 5), s1: rnd(10, 16), a: .55, c0: col('#4a4846'), c1: col('#83807c'), drag: .55 }); }
   },
   // låg, tät dammfront som rullar ut längs marken (40–80 m)
   dustFront(x, y, z, r, k){
-    for (let i = 0; i < 40*FX.rate*k; i++){ const a = Math.random()*6.283, s = rnd(7, 16); P(0, x + Math.cos(a)*r, y + rnd(.3, 2.5), z + Math.sin(a)*r, { vx: Math.cos(a)*s, vz: Math.sin(a)*s, vy: rnd(0, .5), life: rnd(9, 15), s0: rnd(4, 7), s1: rnd(16, 24), a: .5, c0: col('#7c7468'), c1: col('#a39c90'), drag: .32, wind: .3 }); }
+    for (let i = 0; i < 40*FX.rate*k; i++){ const a = Math.random()*6.283, s = rnd(7, 16); P(0, x + Math.cos(a)*r, y + rnd(.3, 2.5), z + Math.sin(a)*r, { vx: Math.cos(a)*s, vz: Math.sin(a)*s, vy: rnd(0, .5), life: rnd(9, 15), s0: rnd(4, 7), s1: rnd(16, 24), a: .5, c0: col('#5c5a57'), c1: col('#8e8b86'), drag: .32, wind: .3 }); }
   },
   decal(kind, p, n, size){
     const D = FX.dec[kind], m = new THREE.Matrix4(), q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(n.x, n.y, n.z));

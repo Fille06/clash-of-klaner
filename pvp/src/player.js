@@ -1,5 +1,6 @@
 // SPELAREN – förstapersonsstyrning med Rapiers karaktärsstyrning, vapen, raketgevär, granater, sprängladdning (R6) och C4.
 import * as THREE from 'three';
+import { makeHand, handMats, orient } from './hands.js';
 import { E, followSun } from './engine.js';
 import { R, PH, ray, own } from './physics.js';
 import { fx, P as fxP } from './fx.js';
@@ -61,16 +62,19 @@ function buildAK(){
   A(prof([[.07, .03], [.1, .03], [.1, .04], [.07, .04]], .012, metal, .002));                                             // laddhandtag
   gun.rotation.y = -Math.PI/2; gun.scale.setScalar(.78); return gun;
 }
+// handgrepp (justeras med G.hand i testläge)
+export const HP = {
+  r: { pose: [[20, 22, 10], [80, 95, 45], [82, 96, 45], [84, 92, 40]], thumb: [30, 45, 50, 40], fy: [0, -.4, -1], bz: [1, 0, -.1], p: [.03, -.068, .088] },
+  l: { pose: [[62, 76, 38], [66, 82, 42], [68, 84, 42], [70, 82, 38]], thumb: [25, 30, 35, 30], fy: [.5, .3, -.8], bz: [-.55, -.8, -.1], p: [-.035, -.07, -.13] },
+};
 function makeViewmodel(){
   const g = PL.vm = new THREE.Group(), gun = buildAK(); g.add(gun);
   const fn = fabricN(); fn.repeat.set(5, 5);
   const camo = canvasTex((x, n) => { x.fillStyle = '#5a5c46'; x.fillRect(0, 0, n, n); const cols = ['#6e6a50', '#47493a', '#7c7458', '#3a3d32']; for (let i = 0; i < 70; i++){ x.fillStyle = cols[i % 4]; x.beginPath(); const cx = Math.random()*n, cy = Math.random()*n; x.ellipse(cx, cy, 8 + Math.random()*26, 5 + Math.random()*14, Math.random()*3, 0, 7); x.fill(); } }); camo.colorSpace = THREE.SRGBColorSpace; camo.repeat.set(2, 2); const glove = new THREE.MeshStandardMaterial({ color: 0x3a3226, roughness: .82, normalMap: fn, normalScale: new THREE.Vector2(.5, .5) }), sleeve = new THREE.MeshStandardMaterial({ map: camo, roughness: .95, normalMap: fn, normalScale: new THREE.Vector2(1.2, 1.2) });
-  // högerhand på greppet, vänsterhand under handskyddet, ärmar mot kameran
-  const hand = (x, y, z, rx, rz, slv) => { const h = new THREE.Group(); h.position.set(x, y, z); h.rotation.set(rx, 0, rz); g.add(h);
-    const palm = new THREE.Mesh(new THREE.CapsuleGeometry(.026, .05, 4, 10), glove); palm.rotation.x = Math.PI/2; h.add(palm);
-    for (let i = 0; i < 4; i++){ const f = new THREE.Mesh(new THREE.CapsuleGeometry(.009, .03, 3, 6), glove); f.position.set(-.024, -.01 + i*.0, -.03 + i*.018); f.rotation.z = .9; h.add(f); }
-    if (slv){ const s = new THREE.Mesh(new THREE.CylinderGeometry(.04, .048, .26, 12), sleeve); s.rotation.x = Math.PI/2; s.position.set(.01, -.01, .16); h.add(s); const cuff = new THREE.Mesh(new THREE.TorusGeometry(.04, .008, 6, 14), glove); cuff.position.set(.01, -.01, .035); h.add(cuff); } return h; };
-  hand(.005, -.066, .05, -.25, .15, true); hand(-.03, -.045, -.2, .1, -.85, true);
+  // händer med handske (hands.js): höger på pistolgreppet med pekfingret vid avtryckaren, vänster under handskyddet
+  const HM = handMats(camo);
+  PL.handR = orient(makeHand(HP.r.pose, HP.r.thumb, -1, HM), new THREE.Vector3(...HP.r.fy), new THREE.Vector3(...HP.r.bz), new THREE.Vector3(...HP.r.p)); g.add(PL.handR);
+  PL.handL = orient(makeHand(HP.l.pose, HP.l.thumb, 1, HM), new THREE.Vector3(...HP.l.fy), new THREE.Vector3(...HP.l.bz), new THREE.Vector3(...HP.l.p)); g.add(PL.handL);
   g.traverse(o => { if (o.isMesh){ o.castShadow = false; o.renderOrder = 10; } });
   const fl = PL.flash = new THREE.Mesh(new THREE.SphereGeometry(.035, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffd080 })); fl.position.set(0, .012, -.72); fl.visible = false; g.add(fl);
   PL.flashL = new THREE.PointLight(0xffb060, 0, 8, 2); fl.add(PL.flashL);
@@ -192,7 +196,7 @@ export function updatePlayer(dt){
   PL.kick *= Math.exp(-dt*14);
   const aim = PL.aim ? 1 : 0; PL.aimK = (PL.aimK || 0) + (aim - (PL.aimK || 0))*Math.min(1, dt*12);
   const relA = PL.rel > 0 ? Math.sin(Math.PI*(1 - PL.rel/PL.relMax)) : 0, sw = PL.swapT > 0 ? PL.swapT/.35 : 0;
-  PL.vm.position.set(.22*(1 - PL.aimK) + Math.sin(PL.bob)*.01*(1 - PL.aimK), -.2 + .127*PL.aimK + Math.abs(Math.cos(PL.bob))*.008 - relA*.12 - sw*.3 - (PL.sprint ? .05 : 0), -.36 + PL.kick*.04 + PL.aimK*.1);
+  PL.vm.position.set(.185*(1 - PL.aimK) + Math.sin(PL.bob)*.01*(1 - PL.aimK), -.2 + .127*PL.aimK + Math.abs(Math.cos(PL.bob))*.008 - relA*.12 - sw*.3 - (PL.sprint ? .05 : 0), -.36 + PL.kick*.04 + PL.aimK*.1);
   PL.vm.rotation.set(PL.kick*.06 + relA*.5, PL.sprint ? .6 : .09*(1 - PL.aimK), PL.sprint ? .25 : relA*.4);
   // raketer
   for (let i = PL.rockets.length - 1; i >= 0; i--){
@@ -210,4 +214,11 @@ export function updatePlayer(dt){
   if (PL.hp < 100) PL.hp = Math.min(100, PL.hp + dt*(PL.dmgT > 0 ? 0 : 6)); PL.dmgT = Math.max(0, (PL.dmgT || 0) - dt);
   if (PL.hp <= 0){ msg('Du dog – återuppstår'); initPlayer({ ...PL.spawn, re: true }); }
   PL.hits = Math.max(0, PL.hits - dt); if (PL.msgT > 0){ PL.msgT -= dt; if (PL.msgT <= 0) PL.msg = null; }
+}
+// test: bygg om händerna efter att HP ändrats (används för att finjustera greppet)
+export function rebuildHands(){
+  const g = PL.vm; if (!g) return; for (const k of ['handR', 'handL']) if (PL[k]) g.remove(PL[k]);
+  const HM = handMats();
+  PL.handR = orient(makeHand(HP.r.pose, HP.r.thumb, -1, HM), new THREE.Vector3(...HP.r.fy), new THREE.Vector3(...HP.r.bz), new THREE.Vector3(...HP.r.p)); g.add(PL.handR);
+  PL.handL = orient(makeHand(HP.l.pose, HP.l.thumb, 1, HM), new THREE.Vector3(...HP.l.fy), new THREE.Vector3(...HP.l.bz), new THREE.Vector3(...HP.l.p)); g.add(PL.handL);
 }

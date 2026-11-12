@@ -36,10 +36,20 @@ function gunModel(shield){
   const L = new THREE.PointLight(0xffb060, 0, 9, 2); fl.add(L);
   return { root, yaw, pitch, fl, L };
 }
+let FANA = null;
 function sectorFan(it, g){
   const r = g.range, a = (it.sec || 360)*Math.PI/180, geo = new THREE.CircleGeometry(r, 48, Math.PI/2 - a/2, a); geo.rotateX(-Math.PI/2);
-  const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xff6040, transparent: true, opacity: .07, depthWrite: false, side: THREE.DoubleSide }));
-  const edge = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0xff8060, transparent: true, opacity: .45 })); m.add(edge); m.renderOrder = 3; return m;
+  // siktsektorn ritas på marken och tonar ut mot kanten (en tät skiva i torn-höjd färgade förut hela bilden orange)
+  FANA = FANA || (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'), g = x.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, '#fff'); g.addColorStop(.75, '#888'); g.addColorStop(1, '#000'); x.fillStyle = g; x.fillRect(0, 0, 128, 128); return new THREE.CanvasTexture(c); })();
+  const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xff6040, alphaMap: FANA, transparent: true, opacity: .07, depthWrite: false, depthTest: false, side: THREE.DoubleSide }));
+  // tydlig kontur: en sektor med en inskjuten sektor som hål (0,35 m bred kant)
+  const sec = (rr, w) => { const sh = new THREE.Shape(), st = Math.PI/2 - a/2, N = 40, P = (k, R) => [Math.cos(st + a*k/N)*R, Math.sin(st + a*k/N)*R];
+    if (a < 6.28){ sh.moveTo(0, 0); for (let k = 0; k <= N; k++) sh.lineTo(...P(k, rr)); sh.lineTo(0, 0); } else { sh.moveTo(rr, 0); sh.absarc(0, 0, rr, 0, 6.2832, false); }
+    const h = new THREE.Path(), ri = rr - w, off = a < 6.28 ? w/Math.sin(Math.min(a, 3.1)/2) : 0, ox = 0, oy = off;
+    if (a < 6.28){ const c = Math.cos(st + a/2), s2 = Math.sin(st + a/2); h.moveTo(c*off, s2*off); for (let k = 1; k < N; k++) h.lineTo(...P(k, ri)); h.lineTo(c*off, s2*off); } else { h.moveTo(ri, 0); h.absarc(0, 0, ri, 0, 6.2832, true); }
+    sh.holes.push(h); const g2 = new THREE.ShapeGeometry(sh, 1); g2.rotateX(-Math.PI/2); return g2; };
+  const edge = new THREE.Mesh(sec(r, .35), new THREE.MeshBasicMaterial({ color: 0xff7050, transparent: true, opacity: .8, depthTest: false, depthWrite: false, side: THREE.DoubleSide }));
+  m.add(edge); m.renderOrder = 30; edge.renderOrder = 31; return m;
 }
 
 // skapa försvarets föremål för en placerad sak (används både i byggaren och i spelet)
@@ -49,7 +59,7 @@ export function defMake(it, spec, b){
     const p = new THREE.Vector3(it.x, it.y + top + g.h, it.z); M.root.position.copy(p); E.scene.add(M.root);
     it.dir = it.dir ?? 0; it.sec = it.sec ?? (it.t === 'tower' ? 360 : 120); it.pri = it.pri || 'nar'; it.mode = it.mode || 'fri';
     const d = { it, g, b, kind: 'gun', M, pos: p, hp: g.hp, alive: true, yaw: it.dir*Math.PI/180, pitch: 0, cool: 0, shots: 0, seen: 0, tgt: null, los: 0, losT: 0, firstSeen: new Map(), shotAt: 0 };
-    M.yaw.rotation.y = d.yaw; d.fan = sectorFan(it, g); d.fan.position.set(it.x, (it.y || 0) + .12 + top, it.z); d.fan.rotation.y = d.yaw; d.fan.visible = false; E.scene.add(d.fan);
+    M.yaw.rotation.y = d.yaw; d.fan = sectorFan(it, g); d.fan.position.set(it.x, (it.y || 0) + .7, it.z); d.fan.rotation.y = d.yaw; d.fan.visible = false; E.scene.add(d.fan);
     d.target = { alive: true, pos: p, hit: (dmg, from) => hurt(d, dmg, from) }; TARGETS.push(d.target);
     DEF.list.push(d); return d;
   }

@@ -26,6 +26,7 @@ export const CATALOG = {
 CATALOG.tower.def = true;
 // markverktyg (gratis – terrängen kostar inga byggpoäng)
 export const TOOLS = { hoj: 'HÖJ', sank: 'SÄNK', plana: 'PLANA', jamna: 'JÄMNA', vatten: 'VATTEN', skog: 'SKOG', roj: 'RÖJ', radera: '⌫ RADERA MARK' };
+const TABS = { mark: 'MARK', bygg: 'BYGGNADER', forsvar: 'FÖRSVAR', arkiv: 'SPARA / LADDA' };
 const PRESETS = { kulle: 'KULLE', plata: 'PLATÅ', sjo: 'SJÖ', dal: 'DAL' };
 export const BD = { on: false, items: [], sel: 'hq', rot: 0, budget: 2000, plot: 64, rad: 6, cam: { a: .8, p: .75, d: 70, x: 0, z: 0 }, ghost: null, hover: null, slot: 0, keys: {}, undo: [], redo: [] };
 T.plot = BD.plot/2;
@@ -113,24 +114,26 @@ export const currentBase = () => ({ items: plain(BD.items), ter: terSave() });
 // gränssnitt: palett (byggnader + markverktyg), mallar, poäng, platser, baskod
 function ui(){
   let u = document.getElementById('bui'); if (!u){ u = document.createElement('div'); u.id = 'bui'; document.body.appendChild(u); }
-  const sl = loadSlots(), hq = BD.items.some(i => i.t === 'hq');
+  const sl = loadSlots(), hq = BD.items.some(i => i.t === 'hq'), tab = BD.tab || (BD.tab = 'bygg');
   u.innerHTML = `<div class="bt">BASBYGGAREN <small>BYGGPOÄNG ${used()} / ${BD.budget >= 99999 ? '∞' : BD.budget}</small> <small style="color:${hq ? 'var(--gr)' : 'var(--or)'}">${hq ? '✓ HÖGKVARTER PLACERAT' : '! PLACERA ETT HÖGKVARTER'}</small></div>
   <div class="bu"><span class="bb" data-undo="1" style="opacity:${BD.undo.length ? 1 : .4}">↶ ÅNGRA</span><span class="bb" data-redo="1" style="opacity:${BD.redo.length ? 1 : .4}">↷ GÖR OM</span><span class="bb" data-clear="1">⌫ RENSA MARKEN</span></div>
+  <div class="bx"><span class="bb" data-test="1" style="opacity:${hq ? 1 : .35}">TESTA BASEN ›</span><span class="bb" data-menu="1">‹ MENY</span></div>
   <div class="bw">
-  <div class="bm"><span class="bl">MARK</span>${Object.entries(TOOLS).map(([k, n]) => `<div class="bi sm ${BD.sel === k ? 'on' : ''}" data-k="${k}">${n}</div>`).join('')}<span class="bl">PENSEL ${BD.rad} M</span><span class="bl">MALL</span>${Object.entries(PRESETS).map(([k, n]) => `<span class="bb" data-pre="${k}">${n}</span>`).join('')}</div>
-  <div class="bf"><span class="bl">FÖRSVAR</span>${Object.entries(CATALOG).filter(([k, c]) => c.def).map(([k, c]) => `<div class="bi sm ${BD.sel === k ? 'on' : ''}" data-k="${k}">${c.name} <small style="display:inline">${c.cost} P</small></div>`).join('')}<div class="bi sm ${BD.sel === 'edit' ? 'on' : ''}" data-k="edit">VÄLJ / STÄLL IN</div></div>
-  <div class="bp">${Object.entries(CATALOG).filter(([k, c]) => !c.def).map(([k, c]) => `<div class="bi ${BD.sel === k ? 'on' : ''}" data-k="${k}">${c.name}<small>${c.cost} P · ${c.spec.w}×${c.spec.d} M</small></div>`).join('')}<div class="bi ${BD.sel === 'del' ? 'on' : ''}" data-k="del">RIV<small>ta bort byggnad</small></div></div>
-  <div class="bs">${sl.map((s, i) => `<span class="bb" data-save="${i}">SPARA ${i + 1}</span><span class="bb" data-load="${i}" style="opacity:${s ? 1 : .35}">LADDA ${i + 1}</span>`).join('')}
-    <span class="bb" data-code="1">BASKOD</span><span class="bb" data-test="1" style="opacity:${hq ? 1 : .35}">TESTA BASEN ›</span><span class="bb" data-menu="1">‹ MENY</span></div>
+  <div class="btab">${Object.entries(TABS).map(([k, n]) => `<span class="tb ${tab === k ? 'on' : ''}" data-tab="${k}">${n}</span>`).join('')}</div>
+  ${tab === 'mark' ? `<div class="bm">${Object.entries(TOOLS).map(([k, n]) => `<div class="bi sm ${BD.sel === k ? 'on' : ''}" data-k="${k}">${n}</div>`).join('')}<span class="bl">PENSEL ${BD.rad} M</span><span class="bl">MALL</span>${Object.entries(PRESETS).map(([k, n]) => `<span class="bb" data-pre="${k}">${n}</span>`).join('')}</div>` : ''}
+  ${tab === 'forsvar' ? `<div class="bf">${Object.entries(CATALOG).filter(([k, c]) => c.def).map(([k, c]) => `<div class="bi ${BD.sel === k ? 'on' : ''}" data-k="${k}">${c.name}<small>${c.cost} P</small></div>`).join('')}<div class="bi ${BD.sel === 'edit' ? 'on' : ''}" data-k="edit">VÄLJ / STÄLL IN<small>siktsektor, eldläge</small></div><div class="bi ${BD.sel === 'del' ? 'on' : ''}" data-k="del">RIV<small>ta bort</small></div></div>` : ''}
+  ${tab === 'bygg' ? `<div class="bp">${Object.entries(CATALOG).filter(([k, c]) => !c.def).map(([k, c]) => `<div class="bi ${BD.sel === k ? 'on' : ''}" data-k="${k}">${c.name}<small>${c.cost} P · ${c.spec.w}×${c.spec.d} M</small></div>`).join('')}<div class="bi ${BD.sel === 'del' ? 'on' : ''}" data-k="del">RIV<small>ta bort byggnad</small></div></div>` : ''}
+  ${tab === 'arkiv' ? `<div class="bs">${sl.map((s, i) => `<span class="bb" data-save="${i}">SPARA ${i + 1}</span><span class="bb" data-load="${i}" style="opacity:${s ? 1 : .35}">LADDA ${i + 1}</span>`).join('')}<span class="bb" data-code="1">BASKOD</span></div>` : ''}
   <div class="bh">${isTool(BD.sel) ? 'HÅLL VÄNSTER MÅLA · [ ] ELLER SHIFT+HJUL PENSELSTORLEK · CTRL+Z ÅNGRA' : 'KLICK BYGG · R VRID · HÖGERDRA VRID KAMERA · HJUL ZOOM · WASD FLYTTA · 1–9 VÄLJ · DELETE RIV VALT · 0 UTVECKLARLÄGE · CTRL+Z ÅNGRA'}</div></div>${editPanel()}<div class="bc" id="bcode"></div>`;
   u.querySelectorAll('.bi').forEach(el => el.onclick = e => { e.stopPropagation(); BD.sel = el.dataset.k; ui(); });
+  u.querySelectorAll('[data-tab]').forEach(el => el.onclick = e => { e.stopPropagation(); BD.tab = el.dataset.tab; const first = { mark: 'hoj', bygg: 'house', forsvar: 'mg' }[BD.tab]; if (first && !(BD.tab === 'mark' ? isTool(BD.sel) : BD.tab === 'forsvar' ? CATALOG[BD.sel] && CATALOG[BD.sel].def || BD.sel === 'edit' : CATALOG[BD.sel] && !CATALOG[BD.sel].def)) BD.sel = first; ui(); });
   u.querySelectorAll('[data-pre]').forEach(el => el.onclick = () => { pushUndo(); terPreset(el.dataset.pre); refreshObjs(); edgeLine(); flash('Mall: ' + PRESETS[el.dataset.pre]); });
   u.querySelectorAll('[data-set]').forEach(el => el.onclick = () => { const it = BD.edit; if (!it) return; pushUndo(); const [k, v] = el.dataset.set.split(':'); if (k === 'dir') it.dir = ((it.dir || 0) + +v + 360) % 360; else it[k] = k === 'sec' ? +v : v; defRefreshFan(it.def); ui(); });
   u.querySelector('[data-undo]').onclick = undo; u.querySelector('[data-redo]').onclick = redo;
   u.querySelector('[data-clear]').onclick = () => { pushUndo(); terPreset('platt'); refreshObjs(); edgeLine(); ui(); flash('Marken är rensad – ↶ ÅNGRA tar tillbaka den'); };
   u.querySelectorAll('[data-save]').forEach(el => el.onclick = () => { const s = loadSlots(); s[+el.dataset.save] = currentBase(); flash(saveSlots(s) ? 'Basen sparad i plats ' + (+el.dataset.save + 1) : 'Kunde inte spara (fullt minne)'); });
   u.querySelectorAll('[data-load]').forEach(el => el.onclick = () => { const s = loadSlots()[+el.dataset.load]; if (s) startBuilder(s); });
-  u.querySelector('[data-code]').onclick = async () => { const c = await encodeBase(currentBase()); document.getElementById('bcode').innerHTML = `<input id="bcin" value="${c}" style="width:420px"> <span class="bb" id="bcl">LADDA KOD</span>`; document.getElementById('bcl').onclick = async () => { try { startBuilder(await decodeBase(document.getElementById('bcin').value)); } catch (e){ flash('Ogiltig baskod'); } }; try { await navigator.clipboard.writeText(c); flash('Baskoden kopierad (' + c.length + ' tecken)'); } catch (e){} };
+  const qc = u.querySelector('[data-code]'); if (qc) qc.onclick = async () => { const c = await encodeBase(currentBase()); document.getElementById('bcode').innerHTML = `<input id="bcin" value="${c}" style="width:420px"> <span class="bb" id="bcl">LADDA KOD</span>`; document.getElementById('bcl').onclick = async () => { try { startBuilder(await decodeBase(document.getElementById('bcin').value)); } catch (e){ flash('Ogiltig baskod'); } }; try { await navigator.clipboard.writeText(c); flash('Baskoden kopierad (' + c.length + ' tecken)'); } catch (e){} };
   u.querySelector('[data-test]').onclick = () => { if (hq) BD.onTest && BD.onTest(currentBase()); else flash('Placera ett högkvarter först'); };
   u.querySelector('[data-menu]').onclick = () => BD.onMenu && BD.onMenu();
 }
@@ -159,7 +162,7 @@ export function bindBuilder(canvas){
     if (e.code === 'KeyR') BD.rot = (BD.rot + 1) % 4;
     if (e.code === 'BracketLeft' || e.code === 'BracketRight'){ BD.rad = Math.max(2, Math.min(20, BD.rad + (e.code === 'BracketRight' ? 1 : -1))); ui(); }
     if ((e.code === 'Delete' || e.code === 'Backspace') && BD.edit){ const it = BD.edit; pushUndo(); disposeItem(it); BD.items.splice(BD.items.indexOf(it), 1); BD.edit = null; setFeet(); ui(); return; }
-    const n = +e.key; if (e.key >= '1' && e.key <= '9'){ BD.sel = [null, 'hq', 'bunker', 'house', 'tower', 'barr', 'wall', 'wallb', 'port', 'mg'][n]; BD.edit = null; ui(); } });
+    const n = +e.key; if (e.key >= '1' && e.key <= '9'){ BD.sel = [null, 'hq', 'bunker', 'house', 'tower', 'barr', 'wall', 'wallb', 'port', 'mg'][n]; BD.tab = BD.sel === 'mg' ? 'forsvar' : 'bygg'; BD.edit = null; ui(); } });
   addEventListener('keyup', e => { BD.keys[e.code] = false; });
 }
 function snap(t, rot, p){ const [w, d] = dims(t, rot); return [Math.round(p.x - w/2) + w/2, Math.round(p.z - d/2) + d/2]; }
@@ -191,7 +194,7 @@ export function updateBuilder(dt){
   BD.ring.visible = tool && !!BD.hover;
   if (BD.ring.visible){ const p = BD.ring.geometry.attributes.position; for (let i = 0; i <= 64; i++){ const a = i/64*6.283, x = BD.hover.x + Math.cos(a)*BD.rad, z = BD.hover.z + Math.sin(a)*BD.rad; p.setXYZ(i, x, Math.max(hAt(x, z), T.sea) + .15, z); } p.needsUpdate = true; BD.ring.material.color.set(BD.sel === 'vatten' ? 0x50b0ff : BD.sel === 'skog' ? 0x70ff70 : BD.sel === 'roj' || BD.sel === 'radera' ? 0xff9050 : 0xffd060); }
   // siktsektorer: alla när man ställer in, det valda starkare
-  for (const it of BD.items) if (it.def && it.def.fan){ defShowFan(it.def, BD.sel === 'edit' || !!GUNS[BD.sel]); it.def.fan.material.opacity = BD.edit === it ? .2 : .06; }
+  for (const it of BD.items) if (it.def && it.def.fan){ defShowFan(it.def, BD.sel === 'edit' || !!GUNS[BD.sel]); it.def.fan.material.opacity = BD.edit === it ? .1 : .03; }
   const g = BD.ghost; g.visible = !!BD.hover && !tool && !!CATALOG[BD.sel];
   if (g.visible){ const c = CATALOG[BD.sel], [w, d] = dims(BD.sel, BD.rot), h = c.spec.floors*c.spec.fh*c.spec.c, [sx, sz] = snap(BD.sel, BD.rot, BD.hover), bad = overlaps(BD.sel, sx, sz, BD.rot) || used() + c.cost > BD.budget || footWater(sx, sz, w, d) > .35, y = Math.max(footHeight(sx, sz, w, d), T.sea + .3);
     g.scale.set(w, h, d); g.position.set(sx, y + h/2, sz); g.material.color.set(bad ? 0xff5040 : 0x4dffa0); }

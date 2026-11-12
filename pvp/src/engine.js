@@ -26,13 +26,13 @@ export function initEngine(canvas){
   // ?test: bilden sparas mellan bilder så att skärmdumpar fungerar när webbläsaren pausar animationen
   const r = E.r = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: location.search.includes('test') });
   r.setPixelRatio(Math.min(devicePixelRatio, E.hq ? 1.5 : 1));
-  r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.0;
+  r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.32;
   r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
   const s = E.scene = new THREE.Scene();
   E.cam = new THREE.PerspectiveCamera(70, 16/9, .05, 1500); s.add(E.cam);
   // dis som på Shanghai-kartan: ljust och blågrått
-  E.fogCol = new THREE.Color(0x9ea2a2); E.fogBase = .0036; s.fog = new THREE.FogExp2(E.fogCol, E.fogBase); E.fogBoost = 0;
-  E.hemi = new THREE.HemisphereLight(0xb8c8dc, 0x7a6450, .45); s.add(E.hemi);
+  E.fogCol = new THREE.Color(0xb8b3a9); E.fogBase = .0036; s.fog = new THREE.FogExp2(E.fogCol, E.fogBase); E.fogBoost = 0;
+  E.hemi = new THREE.HemisphereLight(0xd6dce2, 0x8a7a66, .85); s.add(E.hemi);
   // lägre, varmare sol snett bakifrån – disigt motljus som på Shanghai-kartan
   const sun = E.sun = new THREE.DirectionalLight(0xffd9b0, 3.4); sun.position.set(-110, 48, -60); s.add(sun, sun.target);
   sun.castShadow = true; sun.shadow.mapSize.set(E.hq ? 4096 : 2048, E.hq ? 4096 : 2048); sun.shadow.bias = -.0004; sun.shadow.normalBias = .02;
@@ -46,7 +46,7 @@ export function initEngine(canvas){
   c.addPass(new FxPass(s, E.cam));
   E.bloom = new UnrealBloomPass(new THREE.Vector2(640, 360), .28, .5, .92); c.addPass(E.bloom);
   // färgtoning: lätt kall i skuggor, varm i ljus, vinjett – Frostbite-känsla
-  E.grade = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uVig: { value: .3 }, uSat: { value: .84 }, uCon: { value: 1.08 }, uFlash: { value: 0 } },
+  E.grade = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uVig: { value: .3 }, uSat: { value: .9 }, uCon: { value: 1.1 }, uFlash: { value: 0 } },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position, 1.0); }',
     fragmentShader: `uniform sampler2D tDiffuse; uniform float uVig, uSat, uCon, uFlash; varying vec2 vUv;
       void main(){ vec3 c = texture2D(tDiffuse, vUv).rgb; float l = dot(c, vec3(.2126, .7152, .0722));
@@ -65,15 +65,15 @@ export function loadSky(name){
   return new Promise(res => new HDRLoader().load(E.texBase + name, t => {
     t.mapping = THREE.EquirectangularReflectionMapping;
     const pm = new THREE.PMREMGenerator(E.r); E.env = pm.fromEquirectangular(t).texture; pm.dispose();
-    E.scene.environment = E.env; E.scene.environmentIntensity = .7;
+    E.scene.environment = E.env; E.scene.environmentIntensity = 1.0;
     // himmelskupol: HDR-himlen avmättad och blandad med diset mot horisonten
-    E.skyU = { t: { value: t }, fogC: { value: E.fogCol }, sat: { value: .38 }, inten: { value: .78 } };
+    E.skyU = { t: { value: t }, fogC: { value: E.fogCol }, sat: { value: .3 }, inten: { value: 1.18 } };
     const dome = new THREE.Mesh(new THREE.SphereGeometry(1200, 48, 24), new THREE.ShaderMaterial({ uniforms: E.skyU, side: THREE.BackSide, depthWrite: false, fog: false,
       vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); vec4 p = projectionMatrix*modelViewMatrix*vec4(position, 1.); gl_Position = p.xyww; }',
       fragmentShader: `uniform sampler2D t; uniform vec3 fogC; uniform float sat, inten; varying vec3 vD;
         void main(){ vec3 d = normalize(vD); vec2 uv = vec2(atan(d.z, d.x)*0.15915 + .5, asin(clamp(d.y, -1., 1.))*0.31831 + .5);
           vec3 c = texture2D(t, uv).rgb*inten; float l = dot(c, vec3(.2126, .7152, .0722)); c = mix(vec3(l), c, sat);
-          float h = smoothstep(-.02, .45, d.y); c = mix(fogC*1.05, c, h); c = mix(c, vec3(.27, .32, .4)*inten, smoothstep(.35, .9, d.y)*.45); gl_FragColor = vec4(c, 1.);
+          float h = smoothstep(-.02, .55, d.y); c = mix(fogC*1.32, c, h); c = mix(c, vec3(.52, .56, .6)*inten, smoothstep(.45, .95, d.y)*.18); gl_FragColor = vec4(c, 1.);
           #include <colorspace_fragment>
         }` }));
     dome.renderOrder = -100; dome.frustumCulled = false; E.scene.add(dome); E.dome = dome; E.scene.background = null; res();
@@ -121,5 +121,10 @@ export function render(dt){
   // efter ett stort ras ligger dammet kvar över kartan och lättar sakta (BF4)
   if (E.fogTarget > 0){ E.fogBoost = Math.min(E.fogTarget, E.fogBoost + dt/14); E.fogT = (E.fogT || 0) + dt; if (E.fogT > 22){ E.fogTarget = 0; E.fogT = 0; } } else E.fogBoost = Math.max(0, E.fogBoost - dt/50);
   E.scene.fog.density = E.fogBase*(1 + E.fogBoost*2.6); if (E.dome) E.dome.position.copy(E.cam.position);
+  // efter raset blir staden grå och himlen mörknar (BF4:s väderskifte), sedan ljusnar det sakta igen
+  if (!E.fogCol0){ E.fogCol0 = E.fogCol.clone(); E.fogGrey = new THREE.Color(0x7e7d7b); }
+  const k = Math.min(1, E.fogBoost); E.fogCol.copy(E.fogCol0).lerp(E.fogGrey, k*.75); E.scene.fog.color.copy(E.fogCol);
+  if (E.skyU){ E.skyU.inten.value = 1.18*(1 - .4*k); E.skyU.sat.value = .3*(1 - .6*k); }
+  E.r.toneMappingExposure = 1.32*(1 - .12*k); if (E.hemi) E.hemi.intensity = .85*(1 - .25*k);
   E.r.shadowMap.autoUpdate = false; E.r.shadowMap.needsUpdate = true; E.comp.render(dt);
 }

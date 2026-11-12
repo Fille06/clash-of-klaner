@@ -6,6 +6,7 @@ import { R, PH, own } from './physics.js';
 import { addBuilding } from './destruct.js';
 import { TARGETS } from './player.js';
 import { fx } from './fx.js';
+import { buildProps } from './props.js';
 
 export const MAP = { flags: [], spawn: { x: 0, y: 0, z: 46, yaw: 0 } };
 function staticBox(w, h, d, x, y, z, mat, ry){
@@ -55,7 +56,7 @@ export function buildTraining(){
   for (let i = -50; i < 50; i += 6){ const m = new THREE.Mesh(new THREE.PlaneGeometry(.18, 3), lm); m.rotation.x = -Math.PI/2; m.position.set(0, .015, i - 20); m.receiveShadow = true; E.scene.add(m); }
   // BF4: höghuset som kan rasa – spräng pelarna på bottenvåningen
   const T0 = addBuilding({ x: 0, z: -34, w: 16, d: 16, floors: 24, c: 1, fh: 3, wall: 'frame', win: true, curtain: true, inner: false, cols: 4, keyCols: true });
-  T0.sign = ledSign(); T0.sign.position.set(0, 40, -34 + 8.06); E.scene.add(T0.sign);
+  T0.sign = ledSign(); T0.sign.position.set(0, 40, -34 + 8.06); E.scene.add(T0.sign); MAP.sign = T0.sign;
   // R6: hus med väggar som går att spränga
   addBuilding({ x: -38, z: -10, w: 12, d: 9, floors: 2, c: .5, fh: 6, wall: 'brick' });
   addBuilding({ x: 38, z: -10, w: 11, d: 10, floors: 2, c: .5, fh: 6, wall: 'soft' });
@@ -137,7 +138,7 @@ export function buildTraining(){
     let y = 0, ww = w, dd = d; const steps = 1 + Math.floor(rr()*3);
     for (let s = 0; s < steps; s++){
       const hh = s === steps - 1 ? h - y : h*(.45 + rr()*.25)/(s + 1), mt = ft.clone(), mr = rt.clone(); mt.needsUpdate = mr.needsUpdate = true; mt.repeat.set(ww/40, hh/80); mr.repeat.copy(mt.repeat);
-      const m = new THREE.Mesh(new THREE.BoxGeometry(ww, hh, dd), new THREE.MeshStandardMaterial({ map: mt, roughnessMap: mr, roughness: 1, metalness: k === 1 ? .15 : .7, envMapIntensity: .3, color: 0x7a848c }));
+      const m = new THREE.Mesh(new THREE.BoxGeometry(ww, hh, dd), new THREE.MeshStandardMaterial({ map: mt, roughnessMap: mr, roughness: 1, metalness: k === 1 ? .25 : .85, envMapIntensity: 1.25, color: 0x7a848c }));
       m.position.y = y + hh/2; m.castShadow = true; grp.add(m); y += hh; ww *= .78; dd *= .78; if (y >= h - 1) break;
     }
     const roof = new THREE.MeshStandardMaterial({ color: 0x4a4e52, roughness: .7, metalness: .4 });
@@ -151,5 +152,6 @@ export function buildTraining(){
   tower(-130, -150, 34, 30, 260, 0, .3); tower(120, -170, 28, 28, 230, 2, -.2);   // landmärken
   // mål (flaggor) för HUD:en
   MAP.flags = [{ n: 'A', x: -38, z: -10, own: 'us' }, { n: 'B', x: 0, z: -34, y: 6 }, { n: 'C', x: 38, z: -10, own: 'cn' }];
+  buildProps(MAP.sign);
   return T0;
 }

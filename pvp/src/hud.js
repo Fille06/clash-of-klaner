@@ -25,8 +25,8 @@ export function initHud(o = {}){
   for (let d = -360; d <= 720; d += 5){ const x = (d + 360)*px; const lab = { 0: 'N', 90: 'Ö', 180: 'S', 270: 'V' }[((d % 360) + 360) % 360];
     s += `<i style="left:${x}px;height:${d % 15 === 0 ? 8 : 4}px"></i>`; if (lab) s += `<b style="left:${x}px;color:${lab === 'N' ? 'var(--cy)' : ''}">${lab}</b>`; else if (d % 45 === 0) s += `<b style="left:${x}px;font-size:11px;opacity:.7">${((d % 360) + 360) % 360}</b>`; }
   $('cmp').innerHTML = s; H.cpx = px;
-  H.mm = $('mm').getContext('2d');
-  renderFlags(); renderSquad();
+  H.mm = $('mm').getContext('2d'); H.kt = 0;
+  renderFlags(); renderSquad(); mapSnapshot();
 }
 function renderFlags(){ $('flags').innerHTML = H.flags.map(f => `<div class="flag ${f.own || ''}"><b>${f.n}</b></div>`).join(''); }
 function renderSquad(){ $('squad').innerHTML = `<div class="sq">TRUPP ${H.squad[0]}</div>` + H.squad.slice(1).filter(n => n !== 'Tom plats').map((n, i) => `<div class="${i === 0 ? 'me' : ''}">◆ ${n}</div>`).join(''); }
@@ -38,7 +38,7 @@ export function updateHud(dt){
   const W = WEAPONS[PL.slot], a = PL.ammo[PL.slot] || [0, 0];
   $('wpn').textContent = W.name; $('mag').textContent = PL.rel > 0 ? '––' : a[0]; $('res').textContent = '/ ' + a[1]; $('mode').textContent = W.modes[PL.mode[PL.slot]];
   $('gad').innerHTML = `<span><i>G</i>GRANAT ${PL.gad.gren}</span><span><i>X</i>LADDNING ${PL.gad.breach}</span><span><i>V</i>C4 ${PL.gad.c4}</span>`;
-  $('stance').textContent = PL.crouch > .5 ? '▂' : '▮'; H.kt = (H.kt || 0) + dt; $('keys').style.opacity = H.kt < 12 ? .55 : 0;
+  $('stance').textContent = PL.crouch > .5 ? '▂' : '▮'; H.kt = (H.kt || 0) + dt; $('keys').style.opacity = H.kt < 7 ? .6 : 0;
   const hp = Math.max(0, Math.round(PL.hp)); $('hpn').textContent = hp; $('hpb').style.width = hp + '%'; $('hpw').className = hp < 35 ? 'low' : '';
   // kompass
   const deg = ((-PL.yaw*180/Math.PI) % 360 + 360) % 360; $('cmp').style.left = (260 - (deg + 360)*H.cpx) + 'px'; $('cmpc').textContent = Math.round(deg).toString().padStart(3, '0');
@@ -65,13 +65,12 @@ export function updateHud(dt){
 function drawMinimap(){
   const x = H.mm, s = 236, sc = 1.3, p = E.cam.position; x.clearRect(0, 0, s, s);
   x.save(); x.translate(s/2, s/2); x.rotate(PL.yaw); x.scale(sc, sc); x.translate(-p.x, -p.z);
-  x.fillStyle = 'rgba(22,52,70,.55)'; x.fillRect(p.x - 120, p.z - 120, 240, 240);
-  // kvarter (mörkare) och gator (ljusare)
-  x.fillStyle = 'rgba(40,74,92,.55)'; x.fillRect(p.x - 120, p.z - 120, 240, 240);
-  x.fillStyle = 'rgba(120,160,180,.32)'; for (const [rx, rz, rw, rd] of (MAP.roads || [])) x.fillRect(rx - rw/2, rz - rd/2, rw, rd);
+  x.fillStyle = 'rgba(22,40,50,.7)'; x.fillRect(p.x - 120, p.z - 120, 240, 240);
+  if (H.snap){ const S = H.snap; x.globalAlpha = .92; x.drawImage(S.c, S.x0, S.z0, S.size, S.size); x.globalAlpha = 1; }
+  else { x.fillStyle = 'rgba(120,160,180,.32)'; for (const [rx, rz, rw, rd] of (MAP.roads || [])) x.fillRect(rx - rw/2, rz - rd/2, rw, rd); }
   x.strokeStyle = 'rgba(200,230,245,.08)'; x.lineWidth = .3; for (let g = Math.floor((p.x - 80)/10)*10; g < p.x + 80; g += 10){ x.beginPath(); x.moveTo(g, p.z - 80); x.lineTo(g, p.z + 80); x.stroke(); } for (let g = Math.floor((p.z - 80)/10)*10; g < p.z + 80; g += 10){ x.beginPath(); x.moveTo(p.x - 80, g); x.lineTo(p.x + 80, g); x.stroke(); }
-  for (const b of DS.list){ const S = b.s, gone = b.collapsed > 200; x.fillStyle = gone ? 'rgba(150,170,180,.3)' : 'rgba(205,228,240,.78)'; x.fillRect(S.x - S.w/2, S.z - S.d/2, S.w, S.d); x.strokeStyle = 'rgba(240,248,252,.9)'; x.lineWidth = .6; x.strokeRect(S.x - S.w/2, S.z - S.d/2, S.w, S.d); }
-  for (const [bx, bz, bw, bd] of (MAP.blocks || [])){ x.fillStyle = 'rgba(170,200,215,.45)'; x.fillRect(bx - bw/2, bz - bd/2, bw, bd); }
+  for (const b of DS.list){ const S = b.s, gone = b.collapsed > 200; if (gone){ x.fillStyle = 'rgba(60,60,60,.55)'; x.fillRect(S.x - S.w/2, S.z - S.d/2, S.w, S.d); } x.strokeStyle = gone ? 'rgba(255,140,60,.7)' : 'rgba(240,248,252,.75)'; x.lineWidth = .5; x.strokeRect(S.x - S.w/2, S.z - S.d/2, S.w, S.d); }
+  if (!H.snap) for (const [bx, bz, bw, bd] of (MAP.blocks || [])){ x.fillStyle = 'rgba(170,200,215,.45)'; x.fillRect(bx - bw/2, bz - bd/2, bw, bd); }
   // fiendens försvar som just skjutit syns som röda trianglar (BF4: upptäckt)
   for (const sp of DEF.spots){ x.save(); x.translate(sp.x, sp.z); x.rotate(-PL.yaw); x.globalAlpha = Math.min(1, sp.t); x.fillStyle = '#ff4a2a'; x.beginPath(); x.moveTo(0, -3.2); x.lineTo(2.8, 2.4); x.lineTo(-2.8, 2.4); x.closePath(); x.fill(); x.restore(); }
   x.globalAlpha = 1;
@@ -80,4 +79,19 @@ function drawMinimap(){
   // spelaren i mitten
   x.fillStyle = '#9eff5a'; x.beginPath(); x.moveTo(s/2, s/2 - 7); x.lineTo(s/2 + 5, s/2 + 5); x.lineTo(s/2, s/2 + 2); x.lineTo(s/2 - 5, s/2 + 5); x.closePath(); x.fill();
   x.strokeStyle = 'rgba(158,255,90,.25)'; x.beginPath(); x.moveTo(s/2, s/2); x.lineTo(s/2 - 40, s/2 - 80); x.moveTo(s/2, s/2); x.lineTo(s/2 + 40, s/2 - 80); x.stroke();
+}
+
+// ovanifrånbild av kartan till minikartan (BF4 visar en riktig kartbild): ortografisk kamera rakt ovanifrån, utan dis
+export function mapSnapshot(){
+  try {
+    const R = 160, N = 768, cx = 0, cz = 0;
+    const cam = new THREE.OrthographicCamera(-R, R, R, -R, 1, 900); cam.position.set(cx, 450, cz); cam.up.set(0, 0, -1); cam.lookAt(cx, 0, cz); cam.updateMatrixWorld();
+    const rt = new THREE.WebGLRenderTarget(N, N, { colorSpace: THREE.SRGBColorSpace }), r = E.r, s = E.scene, fog = s.fog, dome = E.dome && E.dome.visible, tm = r.toneMapping;
+    s.fog = null; if (E.dome) E.dome.visible = false; r.setRenderTarget(rt); r.render(s, cam); r.setRenderTarget(null); s.fog = fog; if (E.dome) E.dome.visible = dome;
+    const px = new Uint8Array(N*N*4); r.readRenderTargetPixels(rt, 0, 0, N, N, px); rt.dispose();
+    const c = document.createElement('canvas'); c.width = c.height = N; const x = c.getContext('2d'), im = x.createImageData(N, N);
+    for (let y = 0; y < N; y++){ const src = (N - 1 - y)*N*4; for (let i = 0; i < N*4; i += 4){ const d = y*N*4 + i; // kall kartton som i BF4: avmättad, blåaktig
+      const l = px[src + i]*.3 + px[src + i + 1]*.59 + px[src + i + 2]*.11; im.data[d] = l*.62 + 18; im.data[d + 1] = l*.8 + 26; im.data[d + 2] = l*.92 + 34; im.data[d + 3] = 255; } }
+    x.putImageData(im, 0, 0); H.snap = { c, x0: cx - R, z0: cz - R, size: R*2 };
+  } catch (e){ console.warn('Minikartan: ingen kartbild', e); H.snap = null; }
 }
