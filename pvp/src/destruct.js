@@ -183,19 +183,22 @@ export class Building {
   bigCollapse(list, minJ, baseY){
     const S = this.s, s = S.c, ang = Math.random()*6.283, dir = new THREE.Vector3(Math.cos(ang), 0, Math.sin(ang)), axis = new THREE.Vector3(dir.z, 0, -dir.x);
     const maxJ = Math.max(...list.map(c => c.j)), span = maxJ - minJ + 1, N = Math.max(8, Math.min(14, Math.round(span/(S.fh*2)))), per = Math.ceil(span/N);
-    const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(this.origin.y + .05)); E.r.localClippingEnabled = true;
+    E.r.localClippingEnabled = true;
     const R0 = Math.max(S.w, S.d)*.45, edge = new THREE.Vector3(S.x, 0, S.z).addScaledVector(dir, R0);
     const kinks = new Set([Math.round(N*(.25 + Math.random()*.1)), Math.round(N*(.55 + Math.random()*.1)), Math.random() < .6 ? Math.round(N*.8) : -1]);
-    const slices = [];
+    const slices = [], STUMP = 2, stumpTop = this.origin.y + (minJ - 1 + STUMP*per)*s;
+    const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(stumpTop - .2));
     for (let k = 0; k < N; k++){
-      const j0 = minJ + k*per, j1 = j0 + per, cells = list.filter(c => c.j >= j0 && c.j < j1); if (!cells.length) continue;
+      const j0 = minJ + k*per, j1 = j0 + per; let cells = list.filter(c => c.j >= j0 && c.j < j1); if (!cells.length) continue;
+      if (k < STUMP && k === STUMP - 1){ const keep = cells.filter(c => c.j < j1 - 2 || Math.random() < .45), gone = cells.filter(c => !keep.includes(c)); for (const c of gone) this.kill(c, null, true); cells = keep; }
       const by0 = this.origin.y + (j0 - 1)*s, o = new THREE.Vector3(edge.x, by0, edge.z), grp = new THREE.Group(), by = {};
       for (const c of cells) (by[c.t] = by[c.t] || []).push(c);
       for (const t in by){
         const geos = by[t].map(c => { const p = this.pos(c).sub(o), g = box.clone(); if (t === 'glass') g.scale(c.axis === 'x' ? s*.12 : s, s, c.axis === 'z' ? s*.12 : s); else g.scale(s, s, s); return g.translate(p.x, p.y, p.z); });
-        const m = MATS[t].clone(); m.clippingPlanes = [ground]; if (MATS[t].onBeforeCompile){ m.onBeforeCompile = MATS[t].onBeforeCompile; m.customProgramCacheKey = MATS[t].customProgramCacheKey; }
+        const m = MATS[t].clone(); if (k >= STUMP) m.clippingPlanes = [ground]; if (MATS[t].onBeforeCompile){ m.onBeforeCompile = MATS[t].onBeforeCompile; m.customProgramCacheKey = MATS[t].customProgramCacheKey; }
         const mesh = new THREE.Mesh(mergeGeometries(geos), m); geos.forEach(g => g.dispose()); mesh.castShadow = t !== 'glass'; mesh.receiveShadow = true; grp.add(mesh);
       }
+      if (k < STUMP){ for (const c of cells) this.kill(c, null, true); grp.position.copy(o); E.scene.add(grp); this.stump = (this.stump || []).concat(grp); PH.world.createCollider(R.ColliderDesc.cuboid(S.w/2, per*s/2, S.d/2).setTranslation(S.x, by0 + per*s/2, S.z), PH.ground); continue; }
       // bjälklag syns i brottytan: en mörk platta i skivans botten
       const slab = new THREE.Mesh(box, MATS.slab || MATS.conc); slab.scale.set(S.w*.96, .35, S.d*.96); slab.position.set(S.x - o.x, .2, S.z - o.z); grp.add(slab);
       for (const c of cells) this.kill(c, null, true);
@@ -205,8 +208,8 @@ export class Building {
       slices.push({ grp, h: per*s, a: 0, aT: kink ? .16 + Math.random()*.12 : .015 + Math.random()*.025, b: 0, bT: (Math.random() - .5)*(kink ? .14 : .04), delay: k*.12 + (kink ? .3 : 0), free: null });
     }
     // de översta skivorna ovanför sista knäcken bryts loss efter några sekunder
-    const lastKink = Math.max(...[...kinks].filter(k => k >= 0)), brk = Math.max(lastKink, N - 3);
-    DS.falls.push({ chain: true, slices, edge, base: this.origin.y, baseY, axis, dir, t: 0, v: 0, y: 0, brk, brkT: 3 + Math.random()*1.2, sign: this.sign, b: this, S, h: span*s, dt0: 0 });
+    const lastKink = Math.max(...[...kinks].filter(k => k >= 0)), brk = Math.max(lastKink, N - 3); for (const sl of slices) sl.delay = Math.max(0, sl.delay*1.6);
+    DS.falls.push({ chain: true, slices, edge, base: this.origin.y, baseY: stumpTop, axis, dir, t: 0, v: 0, y: 0, brk: brk - STUMP, brkT: 5 + Math.random()*1.5, sign: this.sign, b: this, S, h: span*s, dt0: 0 });
     this.collapsed += list.length;
     fx.dustWall(S.x, this.origin.y, S.z, Math.max(S.w, S.d), Math.min(2, list.length/1500 + .5)); E.fogTarget = 1; DS.onCollapse && DS.onCollapse(this, list.length);
   }
@@ -215,7 +218,7 @@ const _m = new THREE.Matrix4(), _m2 = new THREE.Matrix4(), _qa = new THREE.Quate
 function updateChain(F, dt){
   F.t += dt;
   // kedjan sjunker med ökande fart (trycks ner i sin egen spillerhög)
-  F.v = Math.min(8, F.v + (F.t < 1 ? 1.4 : 3)*dt); F.y += F.v*dt;
+  F.v = Math.min(4.6, F.v + (F.t < 2 ? .7 : 1.6)*dt); F.y += F.v*dt;
   _m.makeTranslation(F.edge.x, F.baseY - F.y, F.edge.z);
   let k = 0;
   for (const sl of F.slices){
@@ -224,7 +227,7 @@ function updateChain(F, dt){
       if (f.p.y < F.base - 4 && !f.hit){ f.hit = true; fx.dustWall(f.p.x, F.base, f.p.z, 10, .5); }
       if (f.p.y < F.base - 30) sl.grp.visible = false;
       k++; continue; }
-    const u = Math.max(0, Math.min(1, (F.t - sl.delay)/2.6)), e = u*u*(3 - 2*u);
+    const u = Math.max(0, Math.min(1, (F.t - sl.delay)/5)), e = u*u*(3 - 2*u);
     sl.a = sl.aT*e; sl.b = sl.bT*e;
     _qa.setFromAxisAngle(F.axis, sl.a); _qb.setFromAxisAngle(F.dir, sl.b); _qa.multiply(_qb);
     _m2.compose(_p.set(0, 0, 0), _qa, _sc); _m.multiply(_m2);
@@ -241,10 +244,10 @@ function updateChain(F, dt){
     const gx = side < 2 ? S.x + (side ? 1 : -1)*S.w/2 : S.x + u, gz = side < 2 ? S.z + u : S.z + (side === 2 ? 1 : -1)*S.d/2; fx.glass(gx, hy, gz, side < 2 ? (side ? 1 : -1) : 0, side >= 2 ? (side === 2 ? 1 : -1) : 0, 3, true); }
   // mörk rök väller ut vid basen och stiger som en pelare (BF4)
   F.dt0 -= dt; if (F.dt0 <= 0){ F.dt0 = .08; const S = F.S, r = Math.max(S.w, S.d)*.6;
-    for (let n = 0; n < 3; n++){ const a = Math.random()*6.283, d = r*Math.random(); fx.smoke(S.x + Math.cos(a)*d, F.base + 1 + Math.random()*6, S.z + Math.sin(a)*d, 4 + Math.random()*3, true); }
+    for (let n = 0; n < 2; n++){ const a = Math.random()*6.283, d = r*Math.random(); fx.column(S.x + Math.cos(a)*d, F.base + 2 + Math.random()*8, S.z + Math.sin(a)*d, 1); }
     fx.dustWall(S.x, F.base, S.z, r*1.4, .12); if (F.t < 5) fx.dustFront(S.x, F.base, S.z, r, .5);
     if (DS.debris < DS.maxDebris){ const a = Math.random()*6.283; spawnDebris(new THREE.Vector3(S.x + Math.cos(a)*r, F.base + 1 + Math.random()*3, S.z + Math.sin(a)*r), .4 + Math.random()*.8, MATS.conc, new THREE.Vector3(S.x, F.base, S.z)); } }
-  if (F.y > F.h + 8 || F.t > 14){ for (const sl of F.slices){ E.scene.remove(sl.grp); sl.grp.traverse(o => { if (o.isMesh && o.geometry !== box){ o.geometry.dispose(); if (!Object.values(MATS).includes(o.material)) o.material.dispose(); } }); } return true; }
+  if (F.y > F.h + 8 || F.t > 22){ for (const sl of F.slices){ E.scene.remove(sl.grp); sl.grp.traverse(o => { if (o.isMesh && o.geometry !== box){ o.geometry.dispose(); if (!Object.values(MATS).includes(o.material)) o.material.dispose(); } }); } return true; }
   return false;
 }
 const _q = new THREE.Quaternion(), _v = new THREE.Vector3();
@@ -269,17 +272,18 @@ function updateFalls(dt){
   }
 }
 // spillror efter raset (BF4): en hög på 8–12 m av krossad betong, brutna bjälklag och armeringsjärn, rök som hänger kvar
+let RUBM = null;
 function rubble(b){
-  const S = b.s, RR = Math.max(S.w, S.d)*.85, H = 8 + Math.random()*4, y0 = b.origin.y;
+  const S = b.s, RR = Math.max(S.w, S.d)*.95, H = 4.5 + Math.random()*2, y0 = b.origin.y;
   // själva högen: en ojämn kon av betong (triplanar textur), går att klättra på
   const g = new THREE.ConeGeometry(RR, H, 28, 10, true), p = g.attributes.position;
   for (let i = 0; i < p.count; i++){ const x = p.getX(i), y = p.getY(i), z = p.getZ(i), k = 1 - (y + H/2)/H, n = .75 + Math.random()*.5; p.setXYZ(i, x*n, y + (Math.random() - .5)*H*.12*k, z*n); }
-  g.computeVertexNormals(); const mound = new THREE.Mesh(g, MATS.conc); mound.position.set(S.x, y0 + H/2 - .6, S.z); mound.castShadow = mound.receiveShadow = true; E.scene.add(mound);
+  g.computeVertexNormals(); RUBM = RUBM || (() => { const m = MATS.conc.clone(); m.color.set(0x8a8884); m.onBeforeCompile = MATS.conc.onBeforeCompile; m.customProgramCacheKey = MATS.conc.customProgramCacheKey; return m; })(); const mound = new THREE.Mesh(g, RUBM); mound.position.set(S.x, y0 + H/2 - .6, S.z); mound.castShadow = mound.receiveShadow = true; E.scene.add(mound);
   const verts = new Float32Array(p.count*3); for (let i = 0; i < p.count; i++){ verts[i*3] = p.getX(i) + S.x; verts[i*3 + 1] = p.getY(i) + y0 + H/2 - .6; verts[i*3 + 2] = p.getZ(i) + S.z; }
   const hull = R.ColliderDesc.convexHull(verts); if (hull) PH.world.createCollider(hull, PH.ground);
   const onMound = (d) => y0 - .6 + H*Math.max(0, 1 - d/RR);
   // brutna bjälklag som sticker ut i vinklar
-  for (let i = 0; i < 16; i++){ const a = Math.random()*6.283, d = Math.random()*RR*.8, x = S.x + Math.cos(a)*d, z = S.z + Math.sin(a)*d, w = 3 + Math.random()*4, dd = 2 + Math.random()*4;
+  for (let i = 0; i < 26; i++){ const a = Math.random()*6.283, d = Math.random()*RR*.8, x = S.x + Math.cos(a)*d, z = S.z + Math.sin(a)*d, w = 3 + Math.random()*4, dd = 2 + Math.random()*4;
     const m = new THREE.Mesh(box, MATS.slab); m.scale.set(w, .35, dd); m.position.set(x, onMound(d) - .2, z); m.rotation.set((Math.random() - .5)*1.1, Math.random()*3, (Math.random() - .5)*1.1); m.castShadow = m.receiveShadow = true; E.scene.add(m); }
   // betongblock och glasfasadbitar
   for (let i = 0; i < 26; i++){ const a = Math.random()*6.283, d = Math.random()*RR*1.05, x = S.x + Math.cos(a)*d, z = S.z + Math.sin(a)*d, sz = .6 + Math.random()*1.8;

@@ -71,10 +71,13 @@ export const fx = {
   // dammvägg när en byggnad rasar (BF4): tät, låg, sveper ut åt alla håll
   dustWall(x, y, z, r, k){
     // mörk kärna som väller uppåt
-    for (let i = 0; i < 60*FX.rate*k; i++){ const a = Math.random()*6.283, d = Math.random()*r*.5; P(0, x + Math.cos(a)*d, y + rnd(2, 18), z + Math.sin(a)*d, { vx: Math.cos(a)*rnd(.5, 2), vz: Math.sin(a)*rnd(.5, 2), vy: rnd(1.5, 5), life: rnd(10, 18), s0: rnd(5, 8), s1: rnd(16, 26), a: .7, c0: col('#262524'), c1: col('#5e5c5a'), drag: .25 }); }
+    for (let i = 0; i < 60*FX.rate*k; i++){ const a = Math.random()*6.283, d = Math.random()*r*.5; P(0, x + Math.cos(a)*d, y + rnd(2, 18), z + Math.sin(a)*d, { vx: Math.cos(a)*rnd(.5, 2), vz: Math.sin(a)*rnd(.5, 2), vy: rnd(1.5, 5), life: rnd(10, 18), s0: rnd(5, 8), s1: rnd(16, 26), a: .42, c0: col('#2e2d2c'), c1: col('#6e6c6a'), drag: .25 }); }
     // ljus front som rullar ut längs gatan
     for (let i = 0; i < 110*FX.rate*k; i++){ const a = Math.random()*6.283, d = r*.4 + Math.random()*r*.3, s = rnd(4, 10); P(0, x + Math.cos(a)*d, y + rnd(0, 3), z + Math.sin(a)*d, { vx: Math.cos(a)*s, vz: Math.sin(a)*s, vy: rnd(.1, 1.2), life: rnd(8, 14), s0: rnd(3, 5), s1: rnd(10, 16), a: .55, c0: col('#4a4846'), c1: col('#83807c'), drag: .55 }); }
   },
+  // rökpelare (BF4): mjuka, halvgenomskinliga moln i olika grå toner som stiger och vidgas
+  column(x, y, z, k){ const g = .12 + Math.random()*.3, c0 = new THREE.Color(g*.8, g*.78, g*.75), c1 = new THREE.Color(g + .25, g + .24, g + .22);
+    P(0, x, y, z, { vy: rnd(2.5, 5.5)*k, vx: rnd(-.6, .6), vz: rnd(-.6, .6), life: rnd(10, 16), s0: rnd(3, 5), s1: rnd(14, 24), a: rnd(.22, .38), c0, c1, drag: .12, wind: .6 }); },
   // låg, tät dammfront som rullar ut längs marken (40–80 m)
   dustFront(x, y, z, r, k){
     for (let i = 0; i < 40*FX.rate*k; i++){ const a = Math.random()*6.283, s = rnd(7, 16); P(0, x + Math.cos(a)*r, y + rnd(.3, 2.5), z + Math.sin(a)*r, { vx: Math.cos(a)*s, vz: Math.sin(a)*s, vy: rnd(0, .5), life: rnd(9, 15), s0: rnd(4, 7), s1: rnd(16, 24), a: .5, c0: col('#5c5a57'), c1: col('#8e8b86'), drag: .32, wind: .3 }); }
