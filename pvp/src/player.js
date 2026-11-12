@@ -1,7 +1,7 @@
 // SPELAREN – förstapersonsstyrning med Rapiers karaktärsstyrning, vapen, raketgevär, granater, sprängladdning (R6) och C4.
 import * as THREE from 'three';
 import { makeHand, handMats, orient } from './hands.js';
-import { E, followSun } from './engine.js';
+import { E, followSun, tex } from './engine.js';
 import { R, PH, ray, own } from './physics.js';
 import { fx, P as fxP } from './fx.js';
 import { sfx, audioOn } from './audio.js';
@@ -40,8 +40,12 @@ function prof(pts, w, m, bev){
 function cyl(r0, r1, len, m, x, y, seg){ const o = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, len, seg || 16), m); o.rotation.z = Math.PI/2; o.position.set(x, y, 0); return o; }
 function buildAK(){
   const gun = new THREE.Group();
-  const wr = wearR(); wr.repeat.set(4, 4); const metal = new THREE.MeshStandardMaterial({ color: 0x4a4e54, roughness: 1, roughnessMap: wr, metalness: .9, envMapIntensity: 2.2 }), dark = new THREE.MeshStandardMaterial({ color: 0x33363a, roughness: 1, roughnessMap: wr, metalness: .85, envMapIntensity: 2.2 });
-  const poly = new THREE.MeshStandardMaterial({ color: 0x3a3b35, roughness: .58, metalness: .05, envMapIntensity: 1.6 }), lens = new THREE.MeshStandardMaterial({ color: 0x2a4a3a, roughness: .05, metalness: .9, emissive: 0x112211 });
+  const wr = wearR(); wr.repeat.set(4, 4);
+  // riktiga material: borstad/slitna metall (Poly Haven metal_plate) och kornig polymer
+  const stip = canvasTex((x, n) => { x.fillStyle = 'rgb(128,128,255)'; x.fillRect(0, 0, n, n); for (let i = 0; i < 9000; i++){ const v = 108 + Math.random()*40; x.fillStyle = `rgb(${v},${256 - v},245)`; x.fillRect(Math.random()*n, Math.random()*n, 1.5, 1.5); } }); stip.repeat.set(6, 6);
+  const mN = stip.clone(); mN.needsUpdate = true; mN.repeat.set(12, 12);
+  const metal = new THREE.MeshStandardMaterial({ color: 0x4e5258, roughness: .85, roughnessMap: wr, normalMap: mN, normalScale: new THREE.Vector2(.15, .15), metalness: .9, envMapIntensity: 2.2 }), dark = new THREE.MeshStandardMaterial({ color: 0x2c2f33, roughness: .9, roughnessMap: wr, normalMap: mN, normalScale: new THREE.Vector2(.12, .12), metalness: .85, envMapIntensity: 2 });
+  const poly = new THREE.MeshStandardMaterial({ color: 0x34352f, roughness: .72, metalness: .05, normalMap: stip, normalScale: new THREE.Vector2(.5, .5), envMapIntensity: 1.4 }), lens = new THREE.MeshStandardMaterial({ color: 0x2a4a3a, roughness: .05, metalness: .9, emissive: 0x112211 });
   const A = o => { gun.add(o); return o; };
   A(prof([[-.12, -.03], [.16, -.03], [.16, .024], [.12, .034], [-.1, .034], [-.12, .027]], .044, metal));            // låda
   A(prof([[-.37, -.03], [-.12, -.03], [-.12, .018], [-.37, .018], [-.385, .005], [-.385, -.018]], .05, poly, .006)); // handskydd
@@ -60,6 +64,13 @@ function buildAK(){
   const tube = cyl(.021, .021, .072, metal, 0, .082, 20); A(tube); const gl = cyl(.017, .017, .002, lens, -.037, .082, 20); A(gl);
   A(prof([[-.004, .1], [.012, .1], [.012, .108], [-.004, .108]], .014, dark, .001));
   A(prof([[.07, .03], [.1, .03], [.1, .04], [.07, .04]], .012, metal, .002));                                             // laddhandtag
+  // detaljer: utkastaröppning, ventilationsspår i handskyddet, räfflor på magasinet, avtryckare, säkring, kolvplatta
+  const hole = new THREE.MeshStandardMaterial({ color: 0x0c0d0e, roughness: .6, metalness: .5 });
+  { const ep = new THREE.Mesh(new THREE.BoxGeometry(.075, .018, .004), hole); ep.position.set(.02, .012, .0235); gun.add(ep); const bolt = new THREE.Mesh(new THREE.BoxGeometry(.06, .01, .003), metal); bolt.position.set(.02, .012, .0245); gun.add(bolt); }
+  for (let i = 0; i < 6; i++) for (const sz of [-1, 1]){ const v = new THREE.Mesh(new THREE.BoxGeometry(.022, .009, .003), hole); v.position.set(-.34 + i*.036, -.004, sz*.0262); gun.add(v); }
+  for (let i = 0; i < 5; i++){ const rb = new THREE.Mesh(new THREE.BoxGeometry(.004, .03, .032), poly); rb.position.set(-.05 - i*.009 - i*i*.0012, -.07 - i*.026, 0); rb.rotation.z = -.35 - i*.04; gun.add(rb); }
+  { const tr = new THREE.Mesh(new THREE.BoxGeometry(.006, .022, .006), metal); tr.position.set(.012, -.042, 0); tr.rotation.z = .3; gun.add(tr); const sf = new THREE.Mesh(new THREE.BoxGeometry(.04, .006, .003), metal); sf.position.set(.04, .0, .0235); sf.rotation.z = -.2; gun.add(sf);
+    const bp = new THREE.Mesh(new THREE.BoxGeometry(.012, .1, .04), new THREE.MeshStandardMaterial({ color: 0x1a1b1c, roughness: .95 })); bp.position.set(.443, -.035, 0); gun.add(bp); }
   gun.rotation.y = -Math.PI/2; gun.scale.setScalar(.78); return gun;
 }
 // handgrepp (justeras med G.hand i testläge)
@@ -199,7 +210,7 @@ export function updatePlayer(dt){
   PL.kick *= Math.exp(-dt*14);
   const aim = PL.aim ? 1 : 0; PL.aimK = (PL.aimK || 0) + (aim - (PL.aimK || 0))*Math.min(1, dt*12);
   const relA = PL.rel > 0 ? Math.sin(Math.PI*(1 - PL.rel/PL.relMax)) : 0, sw = PL.swapT > 0 ? PL.swapT/.35 : 0;
-  PL.vm.position.set(.185*(1 - PL.aimK) + Math.sin(PL.bob)*.01*(1 - PL.aimK), -.2 + .127*PL.aimK + Math.abs(Math.cos(PL.bob))*.008 - relA*.12 - sw*.3 - (PL.sprint ? .05 : 0), -.36 + PL.kick*.04 + PL.aimK*.1);
+  PL.vm.position.set(.17*(1 - PL.aimK) + Math.sin(PL.bob)*.01*(1 - PL.aimK), -.172 + .099*PL.aimK + Math.abs(Math.cos(PL.bob))*.008 - relA*.12 - sw*.3 - (PL.sprint ? .05 : 0), -.36 + PL.kick*.04 + PL.aimK*.1);
   PL.vm.rotation.set(PL.kick*.06 + relA*.5, PL.sprint ? .6 : .09*(1 - PL.aimK), PL.sprint ? .25 : relA*.4);
   // raketer
   for (let i = PL.rockets.length - 1; i >= 0; i--){
