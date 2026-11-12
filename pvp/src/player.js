@@ -159,13 +159,16 @@ export function explode(p, r, dmg, k, n, breach){
     if (breach){ const up = new THREE.Vector3(0, 1, 0), side = new THREE.Vector3().crossVectors(up, n).normalize();
       for (let i = 0; i < 8; i++){ const a = i/8*6.283 + Math.random()*.4, rr = r*(1.0 + Math.random()*.3), q = p.clone().addScaledVector(n, .9).addScaledVector(side, Math.cos(a)*rr).addScaledVector(up, Math.sin(a)*rr*1.25), h2 = ray(q, { x: -n.x, y: -n.y, z: -n.z }, 1.8); if (h2 && h2.owner && h2.owner.b && h2.owner.t !== 'glass' && h2.toi < 1.05) fx.decal('scorch', h2.point, h2.normal, 2.2 + Math.random()*.8); }
       let t = 0; const iv = setInterval(() => { fxP(0, p.x + n.x*.7 + (Math.random() - .5), p.y - .3 + Math.random(), p.z + n.z*.7 + (Math.random() - .5), { vy: 1 + Math.random(), vx: n.x*.4, vz: n.z*.4, life: 3 + Math.random()*2, s0: .5, s1: 2.6, a: .35, c0: new THREE.Color('#8a8680'), c1: new THREE.Color('#b8b4ac'), drag: .4 }); if ((t += .25) > 6) clearInterval(iv); }, 250); } }
-  const d = p.distanceTo(PL.body.translation()); if (d < r*2.4){ PL.hp -= Math.max(0, (1 - d/(r*2.4)))*90*k; PL.dmgT = .6; } PL.shake = Math.max(PL.shake || 0, Math.max(0, 1.4 - d/40)*k);
+  const d = p.distanceTo(PL.body.translation()); if (d < r*2.4){ PL.hp -= Math.max(0, (1 - d/(r*2.4)))*90*k; PL.dmgT = .6; PL.lastHit = { by: PL.nextCause || 'EXPLOSION', x: p.x, z: p.z }; PL.hurtFrom = { x: p.x, z: p.z, t: 1.2 }; } PL.nextCause = null; PL.shake = Math.max(PL.shake || 0, Math.max(0, 1.4 - d/40)*k);
   for (const t of TARGETS) if (t.alive && t.pos.distanceTo(p) < r*2.2) t.hit(300, p);
 }
 export const TARGETS = [];
 function msg(s){ PL.msg = s; PL.msgT = 2.2; }
 export function updatePlayer(dt){
   if (!PL.on) return;
+  // död (BF4): kameran sjunker mot marken, dödsskärm med vem som dödade dig, sedan återuppståndelse
+  if (PL.deadT > 0){ PL.deadT -= dt; PL.hp = 0; E.cam.position.y += (PL.deadY - E.cam.position.y)*Math.min(1, dt*3); E.cam.rotation.z += (.35 - E.cam.rotation.z)*Math.min(1, dt*2);
+    if (PL.deadT <= 0){ PL.deadT = 0; E.cam.rotation.z = 0; if (PL.vm) PL.vm.visible = true; initPlayer({ ...PL.spawn, re: true }); } return; }
   const k = PL.keys, w = PH.world;
   // rörelse
   PL.crouch += ((k.KeyC || k.ControlLeft ? 1 : 0) - PL.crouch)*Math.min(1, dt*10);
@@ -212,7 +215,7 @@ export function updatePlayer(dt){
     if (g.t <= 0){ E.scene.remove(g.m); w.removeRigidBody(g.b); PL.nades.splice(i, 1); explode(new THREE.Vector3(tr.x, tr.y + .1, tr.z), 3.2, 340, .8); }
   }
   if (PL.hp < 100) PL.hp = Math.min(100, PL.hp + dt*(PL.dmgT > 0 ? 0 : 6)); PL.dmgT = Math.max(0, (PL.dmgT || 0) - dt);
-  if (PL.hp <= 0){ msg('Du dog – återuppstår'); initPlayer({ ...PL.spawn, re: true }); }
+  if (PL.hp <= 0){ PL.hp = 0; PL.deadT = 4; PL.deadY = E.cam.position.y - 1.2; const t = PL.body.translation(), L = PL.lastHit || { by: 'OKÄND' }; PL.death = { by: L.by, d: L.x != null ? Math.round(Math.hypot(L.x - t.x, L.z - t.z)) : null }; if (PL.vm) PL.vm.visible = false; PL.msg = null; return; }
   PL.hits = Math.max(0, PL.hits - dt); if (PL.msgT > 0){ PL.msgT -= dt; if (PL.msgT <= 0) PL.msg = null; }
 }
 // test: bygg om händerna efter att HP ändrats (används för att finjustera greppet)

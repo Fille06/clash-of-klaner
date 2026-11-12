@@ -19,6 +19,7 @@ export function initHud(o = {}){
   <div id="mmw"><div id="mmtop"><div id="flags"></div><div id="tick"><span class="t us" id="tu"></span><span class="bar"><i class="b1" id="tb1"></i><i class="b2" id="tb2"></i></span><span class="t cn" id="tc"></span></div></div>
     <div id="mmbox"><canvas id="mm" width="236" height="236"></canvas></div><div id="squad"></div></div>
   <div id="wp"><div id="wpn"></div><div id="ammo"><span id="mag"></span><span id="res"></span><span id="mode"></span></div><div id="gad"></div><div id="hpw"><span id="stance"></span><span id="hpn"></span><span class="hb"><i id="hpb"></i></span></div></div>
+  <div id="death"><div class="dt">DU DOG</div><div class="db" id="dby"></div><div class="dr" id="drs"></div></div>
   <div id="keys">WASD GÅ · SHIFT SPRING · C DUCKA · 1/2 VAPEN · R LADDA · B ELDLÄGE · G GRANAT · X SPRÄNGLADDNING · V C4 · F SPRÄNG · ESC MENY</div>`;
   // kompassens skala: 3 varv så att den kan rulla
   let s = ''; const px = 3.2;
@@ -51,6 +52,8 @@ export function updateHud(dt){
   // träffriktning (BF4): röd båge mot den som skjuter
   const hf = PL.hurtFrom; if (hf && hf.t > 0 && PL.body){ hf.t -= dt; const t = PL.body.translation(), a = Math.atan2(hf.x - t.x, hf.z - t.z), rel = a - PL.yaw + Math.PI; $('hdir').style.transform = `rotate(${-rel}rad)`; $('hdir').style.opacity = Math.min(1, hf.t*1.5); } else $('hdir').style.opacity = 0;
   $('dmg').style.boxShadow = `inset 0 0 ${160}px rgba(170,0,0,${Math.min(.75, (1 - PL.hp/100)*.9)})`;
+  const dd = PL.deadT > 0; $('death').style.display = dd ? 'block' : 'none'; if (dd){ const D = PL.death || {}; $('dby').innerHTML = `DÖDAD AV <b>${D.by || 'OKÄND'}</b>${D.d != null ? ' · ' + D.d + ' M' : ''}`; $('drs').textContent = 'ÅTERUPPSTÅR OM ' + Math.ceil(PL.deadT); }
+  $('xh').style.display = dd ? 'none' : ''; $('wp').style.opacity = dd ? .25 : 1;
   $('note').textContent = PL.msg || (PL.charges.length ? `[F] SPRÄNG ${PL.charges.length} LADDNING${PL.charges.length > 1 ? 'AR' : ''}` : '');
   if (H.pts){ H.pts.t -= dt; $('pts').textContent = H.pts.t > 0 ? H.pts.s : ''; }
   H.feed.forEach(f => f.t -= dt); H.feed = H.feed.filter(f => f.t > 0); $('feed').innerHTML = H.feed.map(f => `<div>${f.s}</div>`).join('');
@@ -91,7 +94,7 @@ export function mapSnapshot(){
     const px = new Uint8Array(N*N*4); r.readRenderTargetPixels(rt, 0, 0, N, N, px); rt.dispose();
     const c = document.createElement('canvas'); c.width = c.height = N; const x = c.getContext('2d'), im = x.createImageData(N, N);
     for (let y = 0; y < N; y++){ const src = (N - 1 - y)*N*4; for (let i = 0; i < N*4; i += 4){ const d = y*N*4 + i; // kall kartton som i BF4: avmättad, blåaktig
-      const l = px[src + i]*.3 + px[src + i + 1]*.59 + px[src + i + 2]*.11; im.data[d] = l*.62 + 18; im.data[d + 1] = l*.8 + 26; im.data[d + 2] = l*.92 + 34; im.data[d + 3] = 255; } }
+      const l = px[src + i]*.3 + px[src + i + 1]*.59 + px[src + i + 2]*.11; const L2 = Math.max(l, 70); im.data[d] = L2*.62 + 18; im.data[d + 1] = L2*.8 + 26; im.data[d + 2] = L2*.92 + 34; im.data[d + 3] = 255; } }
     x.putImageData(im, 0, 0); H.snap = { c, x0: cx - R, z0: cz - R, size: R*2 };
   } catch (e){ console.warn('Minikartan: ingen kartbild', e); H.snap = null; }
 }

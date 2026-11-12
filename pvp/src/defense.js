@@ -108,7 +108,7 @@ function gunDie(d, fall){
   if (fall){ d.falling = { v: 0, y0: hAt(d.pos.x, d.pos.z) + .3 }; }
   DEF.onKill && DEF.onKill(d);
 }
-function mineBoom(d){ if (!d.alive) return; d.alive = false; d.target.alive = false; E.scene.remove(d.m); explode(d.pos.clone().setY(d.pos.y + .1), 2.4, 700, 1); DEF.onKill && DEF.onKill(d); }
+function mineBoom(d){ if (!d.alive) return; d.alive = false; d.target.alive = false; E.scene.remove(d.m); PL.nextCause = 'MINA'; explode(d.pos.clone().setY(d.pos.y + .1), 2.4, 700, 1); DEF.onKill && DEF.onKill(d); }
 function wireCut(d){ if (!d.alive) return; d.alive = false; d.target.alive = false; d.m.rotation.z = .3; d.m.scale.y = .35; d.m.position.y -= .1; fx.sparks(d.pos.x, d.pos.y + .4, d.pos.z, 0, 1, 0, 8); }
 
 // mål för försvaret: spelaren (fas D: även AI-anfallare via DEF.extra())
@@ -132,7 +132,7 @@ export function updateDefense(dt){
   if (PL.on && PL.body){ const p = PL.body.translation();
     if (p.y - .9 < T.sea - .35) PL.slowK = .55;
     for (const d of DEF.list){
-      if (d.kind === 'wire' && d.alive && Math.abs(p.x - d.pos.x) < d.w/2 + .2 && Math.abs(p.z - d.pos.z) < d.d/2 + .3 && p.y - .9 < d.pos.y + .9){ PL.slowK = Math.min(PL.slowK, .28); PL.hp -= 8*dt; PL.dmgT = .3; if (Math.random() < dt*3) sfx.click(); }
+      if (d.kind === 'wire' && d.alive && Math.abs(p.x - d.pos.x) < d.w/2 + .2 && Math.abs(p.z - d.pos.z) < d.d/2 + .3 && p.y - .9 < d.pos.y + .9){ PL.slowK = Math.min(PL.slowK, .28); PL.hp -= 8*dt; PL.dmgT = .3; PL.lastHit = { by: 'TAGGTRÅD', x: d.pos.x, z: d.pos.z }; if (Math.random() < dt*3) sfx.click(); }
       if (d.kind === 'mine' && d.alive){ d.arm += dt; if (d.arm > .5 && Math.hypot(p.x - d.pos.x, p.z - d.pos.z) < 1.1 && p.y - .9 < d.pos.y + .6){ sfx.click(); mineBoom(d); } }
     } }
   const TG = targets();
@@ -172,7 +172,7 @@ function shoot(d, t){
   const camD = o.distanceTo(E.cam.position); sfx.mg && sfx.mg(camD); if (d.shots % 3 === 0) tracer(start, dir, h ? h.toi : 80);
   DEF.spots.push({ x: d.pos.x, z: d.pos.z, t: 3 }); if (DEF.spots.length > 40) DEF.spots.shift();
   if (!h) return; const p = h.point, n = h.normal;
-  if (h.owner && h.owner.player){ PL.hp -= d.g.dmg; PL.dmgT = .8; PL.hurtFrom = { x: d.pos.x, z: d.pos.z, t: 1.2 }; PL.shake = Math.max(PL.shake || 0, .15); return; }
+  if (h.owner && h.owner.player){ PL.hp -= d.g.dmg; PL.dmgT = .8; PL.hurtFrom = { x: d.pos.x, z: d.pos.z, t: 1.2 }; PL.lastHit = { by: d.g.name, x: d.pos.x, z: d.pos.z }; PL.shake = Math.max(PL.shake || 0, .15); return; }
   if (t.onHit && t.col && h.col.handle === t.col.handle){ t.onHit(d.g.dmg, d); return; }
   if (h.owner && h.owner.b){ const c = h.owner; c.b.hit(c, d.g.dmg*1.2, o); if (c.t === 'glass') return; fx.chips(p.x, p.y, p.z, n.x, n.y, n.z, 3, null); if (c.alive) fx.decal('hole', p, n, .08 + Math.random()*.04); }
   else { fx.dust(p.x, p.y, p.z, .3, 1); fx.chips(p.x, p.y, p.z, n.x, n.y, n.z, 2, '#5a5040'); }

@@ -44,7 +44,7 @@ export function initEngine(canvas){
   if (E.hq){ const ao = E.ao = new GTAOPass(s, E.cam, 1280, 720); ao.updateGtaoMaterial({ radius: .6, distanceExponent: 1.3, thickness: 1.5, scale: 1.1, samples: 16 }); ao.blendIntensity = .9; c.addPass(ao); }
   // partiklar ritas efter GTAO (som annars döljer dem): djupet ritas om först, sedan partikellagret ovanpå
   c.addPass(new FxPass(s, E.cam));
-  E.bloom = new UnrealBloomPass(new THREE.Vector2(640, 360), .28, .5, .92); c.addPass(E.bloom);
+  E.bloom = new UnrealBloomPass(new THREE.Vector2(640, 360), .22, .45, 1.35); c.addPass(E.bloom);
   // färgtoning: lätt kall i skuggor, varm i ljus, vinjett – Frostbite-känsla
   E.grade = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uVig: { value: .3 }, uSat: { value: .9 }, uCon: { value: 1.1 }, uFlash: { value: 0 } },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position, 1.0); }',

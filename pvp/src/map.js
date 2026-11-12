@@ -35,7 +35,7 @@ function ledSign(){
   x.fillStyle = 'rgba(255,240,220,.9)'; x.font = 'bold 120px Rajdhani, sans-serif'; x.textAlign = 'center'; x.fillText('克', 128, 190); x.fillText('兰', 128, 330); x.font = 'bold 42px Rajdhani, sans-serif'; x.fillText('KLANER', 128, 440);
   for (let i = 0; i < 512; i += 4){ x.fillStyle = 'rgba(0,0,0,.18)'; x.fillRect(0, i, 256, 1); }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
-  return new THREE.Mesh(new THREE.PlaneGeometry(9, 18), new THREE.MeshStandardMaterial({ map: t, emissiveMap: t, emissive: 0xffffff, emissiveIntensity: 1.6, roughness: .4 }));
+  return new THREE.Mesh(new THREE.PlaneGeometry(9, 18), new THREE.MeshStandardMaterial({ map: t, emissiveMap: t, emissive: 0xffffff, emissiveIntensity: 1.0, roughness: .4 }));
 }
 export function buildTraining(){
   // mark: asfalt med trottoarer

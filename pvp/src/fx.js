@@ -13,7 +13,8 @@ function atlas(){
   puff(0, 0); puff(128, 0);
   for (let i = 0; i < 34; i++){ const py = 146 + R()*92, px = 64 + (R() - .5)*26, r = (12 + R()*16)*Math.min(1, (py - 128)/70 + .2), g = x.createRadialGradient(px, py, 0, px, py, r); g.addColorStop(0, 'rgba(255,255,255,.35)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 128, 128, 128); }
   // 3: splitter (vass bit) – används för glas och betongflisor
-  x.fillStyle = 'rgba(255,255,255,.95)'; x.beginPath(); x.moveTo(192, 140); x.lineTo(236, 200); x.lineTo(196, 244); x.lineTo(150, 186); x.closePath(); x.fill();
+  // smal, oregelbunden flisa (inte en romb – den såg ut som vita pappersbitar)
+  x.fillStyle = 'rgba(255,255,255,.95)'; x.beginPath(); x.moveTo(184, 134); x.lineTo(206, 158); x.lineTo(214, 236); x.lineTo(196, 250); x.lineTo(186, 196); x.closePath(); x.fill();
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 function cloud(add){
@@ -60,7 +61,7 @@ export const fx = {
   dust(x, y, z, k, n){ for (let i = 0; i < (n || 4); i++) P(3, x, y, z, { vx: rnd(-1, 1)*k, vz: rnd(-1, 1)*k, vy: rnd(.2, 1.2)*k, g: 1.2, life: rnd(1, 2.4), s0: .3*k, s1: 1.6*k, a: .65, c0: col('#9a9184'), c1: col('#b8b2a6'), drag: 1.8 }); },
   chips(x, y, z, nx, ny, nz, n, c){ for (let i = 0; i < n; i++) P(5, x, y, z, { vx: nx*rnd(1, 4) + rnd(-1.5, 1.5), vy: ny*rnd(1, 4) + rnd(0, 2.5), vz: nz*rnd(1, 4) + rnd(-1.5, 1.5), g: 9.8, life: rnd(.6, 1.4), s0: rnd(.05, .12), s1: .05, a: 1, add: false, vr: rnd(-8, 8), c0: col(c || '#6e6860'), c1: col(c || '#6e6860'), drag: .4 }); },
   sparks(x, y, z, nx, ny, nz, n){ for (let i = 0; i < n; i++) P(2, x, y, z, { vx: nx*rnd(1, 5) + rnd(-2, 2), vy: ny*rnd(1, 5) + rnd(0, 3), vz: nz*rnd(1, 5) + rnd(-2, 2), g: 9.8, life: rnd(.15, .45), s0: .07, s1: .015, c0: col('#ffc060'), c1: col('#c02800'), drag: .3 }); },
-  glass(x, y, z, nx, nz, n, big){ for (let i = 0; i < n; i++) P(5, x + rnd(-.25, .25), y + rnd(-.25, .25), z + rnd(-.25, .25), { vx: nx*rnd(.5, 3) + rnd(-1, 1), vy: rnd(-.5, 2), vz: nz*rnd(.5, 3) + rnd(-1, 1), g: 9.8, life: rnd(.8, 1.6)*(big ? 2.4 : 1), s0: big ? rnd(.5, 1) : rnd(.05, .14), s1: big ? .3 : .05, a: big ? .8 : .7, add: false, vr: rnd(-10, 10), c0: col(big ? '#7c8c96' : '#a8bcc6'), c1: col('#5a6a74'), drag: .2 }); },
+  glass(x, y, z, nx, nz, n, big){ for (let i = 0; i < n; i++) P(5, x + rnd(-.25, .25), y + rnd(-.25, .25), z + rnd(-.25, .25), { vx: nx*rnd(.5, 3) + rnd(-1, 1), vy: rnd(-.5, 2), vz: nz*rnd(.5, 3) + rnd(-1, 1), g: 9.8, life: rnd(.8, 1.6)*(big ? 2.4 : 1), s0: big ? rnd(.4, .8) : rnd(.025, .06), s1: big ? .25 : .02, a: big ? .75 : .6, add: false, vr: rnd(-10, 10), c0: col(big ? '#5e6c74' : '#7a8a92'), c1: col('#3c464c'), drag: .2 }); },
   explosion(x, y, z, k){
     for (let i = 0; i < 24*k*FX.rate; i++){ const a = Math.random()*6.283, s = rnd(2, 7)*k; P(1, x, y + .3, z, { vx: Math.cos(a)*s, vz: Math.sin(a)*s, vy: rnd(1, 6)*k, life: rnd(.3, .7), s0: rnd(1.6, 3)*k, s1: .5*k, f: 2, c0: col('#ffd890'), c1: col('#b82a08'), drag: 4 }); }
     for (let i = 0; i < 16*k*FX.rate; i++){ const a = Math.random()*6.283, s = rnd(.5, 2.5)*k; P(0, x, y + .4, z, { vx: Math.cos(a)*s, vz: Math.sin(a)*s, vy: rnd(.6, 2.2), life: rnd(5, 9), s0: 1.6*k, s1: rnd(5, 8)*k, a: .7, c0: col('#3a3530'), c1: col('#8a857c'), drag: 1.4 }); }
