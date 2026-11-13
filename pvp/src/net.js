@@ -39,7 +39,7 @@ function handle(m){
   const d = m.d || {}, from = m.from;
   switch (m.k){
     case 'st': peerUpdate(from, d); break;
-    case 'boom': if (Array.isArray(d.p) && d.p.length === 3 && d.p.every(Number.isFinite) && Number.isFinite(d.r) && Number.isFinite(d.dmg)){ const n = Array.isArray(d.n) && d.n.length === 3 && d.n.every(Number.isFinite) ? new THREE.Vector3(...d.n) : null; NET.applying = true; try { explode(new THREE.Vector3(...d.p), Math.max(0, Math.min(d.r, 8)), Math.max(0, Math.min(d.dmg, 3000)), Math.max(0, Math.min(d.k || 1, 2)), n, !!d.br, false, d.team === 'A' || d.team === 'B' ? localTeam(d.team) : null, Number.isInteger(d.seed) ? d.seed : null); } finally { NET.applying = false; } } break;
+    case 'boom': if (Array.isArray(d.p) && d.p.length === 3 && d.p.every(Number.isFinite) && Number.isFinite(d.r) && Number.isFinite(d.dmg)){ const n = Array.isArray(d.n) && d.n.length === 3 && d.n.every(Number.isFinite) ? new THREE.Vector3(...d.n) : null; NET.applying = true; NETHOOK.applying = true; try { explode(new THREE.Vector3(...d.p), Math.max(0, Math.min(d.r, 8)), Math.max(0, Math.min(d.dmg, 3000)), Math.max(0, Math.min(d.k || 1, 2)), n, !!d.br, false, d.team === 'A' || d.team === 'B' ? localTeam(d.team) : null, Number.isInteger(d.seed) ? d.seed : null); } finally { NET.applying = false; NETHOOK.applying = false; } } break;
     case 'cell': { const B = DS.list[d.b], c = B && B.cells[d.c]; if (c && Number.isFinite(d.dmg)) B.hit(c, Math.max(0, Math.min(d.dmg, 200)), null); break; }
     case 'hit': if (Number.isFinite(d.dmg)){ const dmg = Math.max(0, Math.min(d.dmg, 150));
       // värden: bara träffar på motståndarlagets AI-soldater räknas
@@ -81,11 +81,12 @@ export function netBegin(){
   // krokar: mina sprängningar och skott på byggnader skickas till de andra
   // laget skickas med (A/B) så att mottagarna inte skadar avsändarlagets egna soldater
   NETHOOK.boom = (p, r, dmg, k, n, br, seed, team) => { if (!NET.applying) ev('boom', { p: [p.x, p.y, p.z].map(v => Math.round(v*100)/100), r, dmg, k, n: n ? [n.x, n.y, n.z] : null, br: !!br, seed, team: team === 'us' || team === 'pl' ? NET.team : team === 'them' ? other(NET.team) : null }); };
+  NETHOOK.host = !!NET.host;
   NETHOOK.cell = (c, dmg) => { const bi = DS.list.indexOf(c.b), ci = c.b.cells.indexOf(c); if (bi >= 0 && ci >= 0) ev('cell', { b: bi, c: ci, dmg: Math.round(dmg) }); };
   BOTS.onProxyHit = (id, dmg) => ev('hit', { to: 'host', bot: id, dmg: Math.round(dmg) });
 }
 export function netStop(reason){
-  NET.on = false; NETHOOK.boom = NETHOOK.cell = null; BOTS.onProxyHit = null;
+  NET.on = false; NETHOOK.boom = NETHOOK.cell = null; NETHOOK.host = null; BOTS.onProxyHit = null;
   for (const id of [...NET.peers.keys()]) peerRemove(id);
   if (reason && NET.ui.onStopped) NET.ui.onStopped(reason);
 }

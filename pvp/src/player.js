@@ -162,7 +162,7 @@ function detonate(){
   PL.charges.length = 0;
 }
 // nätverkskrokar (sätts av net.js): mina sprängningar och skott på byggnader skickas till de andra spelarna
-export const NETHOOK = { boom: null, cell: null };
+export const NETHOOK = { boom: null, cell: null, applying: false, host: null };
 export function explode(p, r, dmg, k, n, breach, net, team, seed){
   // online: sprängningens slump styrs av ett frö som följer med i nätverket, så att samma celler förstörs hos alla
   if (seed == null && net && NETHOOK.boom) seed = (Math.random()*2147483647) | 0;

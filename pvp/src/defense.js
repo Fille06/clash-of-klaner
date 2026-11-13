@@ -5,7 +5,7 @@ import { E } from './engine.js';
 import { R, PH, own, ray } from './physics.js';
 import { fx } from './fx.js';
 import { sfx } from './audio.js';
-import { PL, TARGETS, explode } from './player.js';
+import { PL, TARGETS, explode, NETHOOK } from './player.js';
 import { DS } from './destruct.js';
 import { T, hAt } from './terrain.js';
 
@@ -183,9 +183,11 @@ function gunDie(d, fall){
   if (fall){ d.falling = { v: 0, y0: hAt(d.pos.x, d.pos.z) + .3 }; }
   DEF.onKill && DEF.onKill(d);
 }
-function mineBoom(d){ if (!d.alive) return; d.alive = false; d.target.alive = false; E.scene.remove(d.m); PL.nextCause = 'MINA'; explode(d.pos.clone().setY(d.pos.y + .1), 2.4, 700, 1, null, false, true, d.it && d.it.side); DEF.onKill && DEF.onKill(d); }
+// en sprängning som kommer från nätet tar bort minan tyst (den som orsakade den har redan skickat sin egen sprängning)
+function quietRemove(d){ d.alive = false; d.target.alive = false; E.scene.remove(d.m); }
+function mineBoom(d){ if (!d.alive) return; if (NETHOOK.applying) return quietRemove(d); d.alive = false; d.target.alive = false; E.scene.remove(d.m); PL.nextCause = 'MINA'; explode(d.pos.clone().setY(d.pos.y + .1), 2.4, 700, 1, null, false, true, d.it && d.it.side); DEF.onKill && DEF.onKill(d); }
 function clayBoom(d){
-  if (!d.alive) return; d.alive = false; d.target.alive = false; E.scene.remove(d.m); PL.nextCause = 'CLAYMORE';
+  if (!d.alive) return; if (NETHOOK.applying) return quietRemove(d); d.alive = false; d.target.alive = false; E.scene.remove(d.m); PL.nextCause = 'CLAYMORE';
   const f = new THREE.Vector3(Math.sin(d.dir), 0, Math.cos(d.dir)), p = d.pos.clone().setY(d.pos.y + .3);
   explode(p.clone().addScaledVector(f, 1.2), 1.6, 400, .6, null, false, true, d.it && d.it.side);
   // splitter framåt: extra skada i en kon framför minan

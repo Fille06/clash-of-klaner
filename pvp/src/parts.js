@@ -7,7 +7,7 @@ import { R, PH } from './physics.js';
 import { fx } from './fx.js';
 import { DS } from './destruct.js';
 import { T, hAt } from './terrain.js';
-import { explode, PL } from './player.js';
+import { explode, PL, NETHOOK } from './player.js';
 
 export const PARTS = { list: [] };
 let M = null;
@@ -177,7 +177,8 @@ export function updateParts(dt){
     // explosiva byggnader (ammunitionsförråd): smäller när en tredjedel är sönderskjuten eller de rasar
     if (it.explosive && it.b && !it.boomed){
       const B = it.b, alive = B.cells.reduce((a, c) => a + (c.alive ? 1 : 0), 0);
-      if (B.collapsed > 0 || alive < B.cells.length*.67){
+      // online avgör bara värden när förrådet smäller (de andra får sprängningen från värden)
+      if ((B.collapsed > 0 || alive < B.cells.length*.67) && !(NETHOOK.boom && NETHOOK.host === false)){
         it.boomed = true; PL.nextCause = 'AMMUNITIONSFÖRRÅD';
         explode(new THREE.Vector3(it.x, it.y + 1.5, it.z), 6, 900, 1.6, null, false, true, it.side);
       }

@@ -54,7 +54,9 @@ export function bindSetup(mode, back){
 }
 
 // lagets AI-soldater: roller och vapen
-function squad(n, roleFor){ const out = []; for (let i = 0; i < n; i++) out.push({ role: roleFor(i, n), kind: i % 4 === 3 ? 'rpg' : i % 3 === 2 ? 'ing' : 'gevar' }); return out; }
+// sorterna fördelas efter roll: anfallarna får ingenjörer och RPG först (de behövs för att fälla högkvarteret), försvararna gevär och RPG
+const ATT_KINDS = ['ing', 'rpg', 'gevar', 'ing', 'gevar', 'rpg'], DEF_KINDS = ['gevar', 'rpg', 'gevar', 'gevar'];
+function squad(n, roleFor){ const out = []; let a = 0, d = 0; for (let i = 0; i < n; i++){ const role = roleFor(i, n); out.push({ role, kind: role === 'attack' ? ATT_KINDS[a++ % ATT_KINDS.length] : DEF_KINDS[d++ % DEF_KINDS.length] }); } return out; }
 
 // ONLINE: bygg matchen från serverns startmeddelande. Lag A:s bas ligger alltid på tomt 1 och lag B:s på tomt 2
 // (bas mot bas), så alla spelare har samma karta. "Vi" = mitt lag.
@@ -124,7 +126,7 @@ export function startMatch(cfg){
   MATCH.tick.us = BOTS.tickets.us; MATCH.tick.cn = BOTS.tickets.them; MATCH.tick.max = Math.max(1, n*8);
   const flags = []; if (hqUs) flags.push({ n: 'HQ', x: hqUs.x, z: hqUs.z, y: 8, own: 'us' }); if (hqThem) flags.push({ n: 'FI', x: hqThem.x, z: hqThem.z, y: 8, own: 'cn' });
   document.getElementById('menu').classList.add('hidden'); document.getElementById('hud').classList.remove('hidden');
-  if (PL.vm) PL.vm.visible = true; PL.deadT = 0; PL.death = null;
+  if (PL.vm) PL.vm.visible = true; PL.deadT = 0; PL.death = null; PL.lastHit = null; PL.hurtFrom = null;
   initPlayer({ x: px, y: hAt(px, pz) + .3, z: pz, yaw: (bmb && !flip) || attack ? 0 : Math.PI });
   initHud({ flags, tick: MATCH.tick, squad: ['ALFA', 'Du', ...BOTS.list.filter(b => b.team === 'us').slice(0, 4).map(b => b.name)] });
   BOTS.onKill = (b, by) => { if (by === 'Du'){ hudFeed('Du', b.name, 'AK-12'); hudPoints(100, 'FIENDE NEDSKJUTEN'); } };
@@ -134,7 +136,7 @@ export function startMatch(cfg){
   lockPointer(document.getElementById('c'));
 }
 
-export function stopMatch(){ MATCH.on = false; DEF.maxRange = null; botsClear(); DEF.extra = null; if (NET.on) netStop(); }
+export function stopMatch(){ MATCH.on = false; MATCH.id = (MATCH.id || 0) + 1; DEF.maxRange = null; botsClear(); DEF.extra = null; if (NET.on) netStop(); }
 
 export function updateMatch(dt){
   if (!MATCH.on || MATCH.over) return;
@@ -149,7 +151,8 @@ export function updateMatch(dt){
   if (NET.on && !NET.host) return; // värden avgör matchen och skickar resultatet
   const hqUs = BOTS.hq.us, hqThem = BOTS.hq.them;
   // ett lag är slut när det saknar liv och har inga anfallare kvar (försvarare kan inte ta fiendens högkvarter; i försvar/anfall räknas alla)
-  const out = team => BOTS.tickets[team] <= 0 && !BOTS.list.some(b => b.team === team && b.alive && (!bmb || b.role === 'attack')) && (team !== 'us' || PL.hp <= 0 || PL.deadT > 0 || bmb);
+  const humansAlive = team => (team === 'us' && PL.hp > 0 && !(PL.deadT > 0)) || (BOTS.peers || []).some(p => p.team === team && !p.dead);
+  const out = team => BOTS.tickets[team] <= 0 && !BOTS.list.some(b => b.team === team && b.alive && (!bmb || b.role === 'attack')) && !humansAlive(team);
   let win = null, why = '';
   if (hqThem && hqThem.dead){ win = true; why = 'Fiendens högkvarter är förstört'; }
   else if (hqUs && hqUs.dead){ win = false; why = 'Vårt högkvarter har fallit'; }
