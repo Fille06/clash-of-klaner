@@ -158,7 +158,7 @@ function placeCharge(kind){
 function detonate(){
   if (!PL.charges.length) return;
   for (const c of PL.charges){ E.scene.remove(c.m); const p = c.p.clone().addScaledVector(c.n, -.3);
-    if (c.kind === 'breach') explode(p, 1.3, 1700, .7, c.n, true, true); else explode(p, 2.4, 2600, 1.3, c.n, false, true); }
+    if (c.kind === 'breach') explode(p, 1.3, 1700, .7, c.n, true, true, 'pl'); else explode(p, 2.4, 2600, 1.3, c.n, false, true, 'pl'); }
   PL.charges.length = 0;
 }
 // nätverkskrokar (sätts av net.js): mina sprängningar och skott på byggnader skickas till de andra spelarna
@@ -177,7 +177,8 @@ export function explode(p, r, dmg, k, n, breach, net, team, seed){
       let t = 0; const iv = setInterval(() => { fxP(0, p.x + n.x*.7 + (Math.random() - .5), p.y - .3 + Math.random(), p.z + n.z*.7 + (Math.random() - .5), { vy: 1 + Math.random(), vx: n.x*.4, vz: n.z*.4, life: 3 + Math.random()*2, s0: .5, s1: 2.6, a: .35, c0: new THREE.Color('#8a8680'), c1: new THREE.Color('#b8b4ac'), drag: .4 }); if ((t += .25) > 6) clearInterval(iv); }, 250); } }
   const d = p.distanceTo(PL.body.translation()); if (d < r*2.4 && team !== 'us'){ PL.hp -= Math.max(0, (1 - d/(r*2.4)))*90*k; PL.dmgT = .6; PL.lastHit = { by: PL.nextCause || 'EXPLOSION', x: p.x, z: p.z }; PL.hurtFrom = { x: p.x, z: p.z, t: 1.2 }; } PL.nextCause = null; PL.shake = Math.max(PL.shake || 0, Math.max(0, 1.4 - d/40)*k);
   // lagets egna sprängningar skadar inte lagkamrater (ingen vådabeskjutning från egna ingenjörer och RPG)
-  for (const t of TARGETS) if (t.alive && t.pos.distanceTo(p) < r*2.2 && !(team && t.bot && t.bot.team === team)) t.hit(300, p);
+  const ft = team === 'pl' ? 'us' : team;
+  for (const t of TARGETS) if (t.alive && t.pos.distanceTo(p) < r*2.2 && !(ft && t.bot && t.bot.team === ft)) t.hit(300, p);
 }
 export const TARGETS = [];
 function msg(s){ PL.msg = s; PL.msgT = 2.2; }
@@ -223,13 +224,13 @@ export function updatePlayer(dt){
     const r = PL.rockets[i]; r.t += dt; const step = r.v.clone().multiplyScalar(dt), len = step.length(), dir = step.clone().normalize();
     const h = ray(r.m.position, dir, len, PL.col);
     fx.smoke(r.m.position.x, r.m.position.y, r.m.position.z, .25, false); fx.fire(r.m.position.x, r.m.position.y, r.m.position.z, .25);
-    if (h || r.t > 4){ const p = h ? new THREE.Vector3(h.point.x, h.point.y, h.point.z) : r.m.position.clone(); E.scene.remove(r.m); PL.rockets.splice(i, 1); explode(p, 2.2, 1500, 1.2, h ? new THREE.Vector3(h.normal.x, h.normal.y, h.normal.z) : null, false, true); continue; }
+    if (h || r.t > 4){ const p = h ? new THREE.Vector3(h.point.x, h.point.y, h.point.z) : r.m.position.clone(); E.scene.remove(r.m); PL.rockets.splice(i, 1); explode(p, 2.2, 1500, 1.2, h ? new THREE.Vector3(h.normal.x, h.normal.y, h.normal.z) : null, false, true, 'pl'); continue; }
     r.m.position.add(step); r.v.y -= 1.5*dt;
   }
   // granater
   for (let i = PL.nades.length - 1; i >= 0; i--){
     const g = PL.nades[i], tr = g.b.translation(); g.m.position.set(tr.x, tr.y, tr.z); g.t -= dt;
-    if (g.t <= 0){ E.scene.remove(g.m); w.removeRigidBody(g.b); PL.nades.splice(i, 1); explode(new THREE.Vector3(tr.x, tr.y + .1, tr.z), 3.2, 340, .8, null, false, true); }
+    if (g.t <= 0){ E.scene.remove(g.m); w.removeRigidBody(g.b); PL.nades.splice(i, 1); explode(new THREE.Vector3(tr.x, tr.y + .1, tr.z), 3.2, 340, .8, null, false, true, 'pl'); }
   }
   if (PL.hp < 100) PL.hp = Math.min(100, PL.hp + dt*(PL.dmgT > 0 ? 0 : 6)); PL.dmgT = Math.max(0, (PL.dmgT || 0) - dt);
   if (PL.hp <= 0){ PL.hp = 0; PL.deadT = 4; PL.deadY = E.cam.position.y - 1.2; const t = PL.body.translation(), L = PL.lastHit || { by: 'OKÄND' }; PL.death = { by: L.by, d: L.x != null ? Math.round(Math.hypot(L.x - t.x, L.z - t.z)) : null }; if (PL.vm) PL.vm.visible = false; PL.msg = null; return; }

@@ -9,7 +9,7 @@ import { BD, buildPlot, rebuild, normBase, loadSlots, decodeBase } from './build
 import { T, terPhysics, hAt, terRot180 } from './terrain.js';
 import { DEF, defStart, defStop } from './defense.js';
 import { partsStart, partsStop } from './parts.js';
-import { BOTS, botsStart, botsClear, botTargets } from './bots.js';
+import { BOTS, botsStart, botsClear, botTargets, botAdd } from './bots.js';
 import { aiBase3d } from './aibase.js';
 import { DS } from './destruct.js';
 import { NET, netBegin, netStop, netTick, netDead, netEnd } from './net.js';
@@ -94,6 +94,8 @@ export function startMatch(cfg){
   DEF.maxRange = bmb ? 85 : 110;
   // försvaren gör något mindre skada mot AI-soldater i bas mot bas, så att ett anfall kan bryta igenom och högkvarteret avgör
   BOTS.defDmg = bmb ? .6 : 1;
+  // online: en spelare som lämnar ersätts av en AI-soldat (värden)
+  if (net && net.host) NET.ui.replace = team => botAdd(team, bmb ? 'attack' : team === (defend ? 'us' : 'them') ? 'defend' : 'attack', 'gevar');
   partsStart([...ours, ...theirs].map(i => Object.assign(i, { explosive: !!(BD.CAT[i.t] && BD.CAT[i.t].explosive) })));
   const hqUs = ours.find(i => i.t === 'hq'), hqThem = theirs.find(i => i.t === 'hq');
   // var lagen startar
@@ -122,7 +124,7 @@ export function startMatch(cfg){
   MATCH.tick.us = BOTS.tickets.us; MATCH.tick.cn = BOTS.tickets.them; MATCH.tick.max = Math.max(1, n*8);
   const flags = []; if (hqUs) flags.push({ n: 'HQ', x: hqUs.x, z: hqUs.z, y: 8, own: 'us' }); if (hqThem) flags.push({ n: 'FI', x: hqThem.x, z: hqThem.z, y: 8, own: 'cn' });
   document.getElementById('menu').classList.add('hidden'); document.getElementById('hud').classList.remove('hidden');
-  if (PL.vm) PL.vm.visible = true;
+  if (PL.vm) PL.vm.visible = true; PL.deadT = 0; PL.death = null;
   initPlayer({ x: px, y: hAt(px, pz) + .3, z: pz, yaw: (bmb && !flip) || attack ? 0 : Math.PI });
   initHud({ flags, tick: MATCH.tick, squad: ['ALFA', 'Du', ...BOTS.list.filter(b => b.team === 'us').slice(0, 4).map(b => b.name)] });
   BOTS.onKill = (b, by) => { if (by === 'Du'){ hudFeed('Du', b.name, 'AK-12'); hudPoints(100, 'FIENDE NEDSKJUTEN'); } };
@@ -146,7 +148,8 @@ export function updateMatch(dt){
   MATCH.tick.us = BOTS.tickets.us; MATCH.tick.cn = BOTS.tickets.them;
   if (NET.on && !NET.host) return; // värden avgör matchen och skickar resultatet
   const hqUs = BOTS.hq.us, hqThem = BOTS.hq.them;
-  const out = team => BOTS.tickets[team] <= 0 && !BOTS.list.some(b => b.team === team && b.alive) && (team !== 'us' || PL.hp <= 0 || PL.deadT > 0);
+  // ett lag är slut när det saknar liv och har inga anfallare kvar (försvarare kan inte ta fiendens högkvarter; i försvar/anfall räknas alla)
+  const out = team => BOTS.tickets[team] <= 0 && !BOTS.list.some(b => b.team === team && b.alive && (!bmb || b.role === 'attack')) && (team !== 'us' || PL.hp <= 0 || PL.deadT > 0 || bmb);
   let win = null, why = '';
   if (hqThem && hqThem.dead){ win = true; why = 'Fiendens högkvarter är förstört'; }
   else if (hqUs && hqUs.dead){ win = false; why = 'Vårt högkvarter har fallit'; }

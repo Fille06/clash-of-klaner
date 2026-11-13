@@ -225,6 +225,8 @@ export function updateDefense(dt){
     if (sh.t <= 0){ if (sh.m) E.scene.remove(sh.m); DEF.shells.splice(i, 1); if (DEF.on){ PL.nextCause = sh.by; explode(sh.to, sh.r, sh.dmg, sh.k, sh.n, sh.breach, true, sh.side); } } }
   if (!DEF.on) return;
   DEF.alarm = Math.max(0, (DEF.alarm || 0) - dt);
+  // minor och claymore laddas efter 0,5 s oavsett vem som äger dem (förut bara i spelarslingan, så egna utlöstes aldrig av fiendens AI)
+  for (const d of DEF.list) if ((d.kind === 'claymore' || d.kind === 'mine') && d.alive) d.armT = (d.armT || 0) + dt;
   // spelaren: taggtråd och vatten bromsar
   PL.slowK = 1;
   if (PL.on && PL.body){ const p = PL.body.translation();
@@ -292,7 +294,7 @@ function shoot(d, t){
     DEF.shells.push({ m, from: start.clone(), to, t: T0, T: T0, r: d.g.splash, dmg: 650, k: 1, n: h ? new THREE.Vector3(h.normal.x, h.normal.y, h.normal.z) : null, breach: !!(h && h.owner && h.owner.b), by: d.g.name, side: d.it && d.it.side });
     return;
   }
-  if (d.g.splash && h){ const hp = new THREE.Vector3(h.point.x, h.point.y, h.point.z); setTimeout(() => { if (DEF.on){ PL.nextCause = d.g.name; explode(hp, d.g.splash, 120, .3); } }, Math.min(400, dist*4)); }
+  if (d.g.splash && h){ const hp = new THREE.Vector3(h.point.x, h.point.y, h.point.z); setTimeout(() => { if (DEF.on){ PL.nextCause = d.g.name; explode(hp, d.g.splash, 120, .3, null, false, true, d.it && d.it.side); } }, Math.min(400, dist*4)); }
   if (!h) return; const p = h.point, n = h.normal;
   if (h.owner && h.owner.player){ PL.hp -= d.g.dmg; PL.dmgT = .8; PL.hurtFrom = { x: d.pos.x, z: d.pos.z, t: 1.2 }; PL.lastHit = { by: d.g.name, x: d.pos.x, z: d.pos.z }; PL.shake = Math.max(PL.shake || 0, .15); return; }
   if (t.onHit && t.col && h.col.handle === t.col.handle){ t.onHit(d.g.dmg, d); return; }

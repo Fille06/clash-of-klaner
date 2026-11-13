@@ -106,7 +106,7 @@ export function botAdd(team, role, kind, name){
   TARGETS.push(b.target); BOTS.list.push(b); return b;
 }
 function hurt(b, dmg, by){
-  if (!b.alive) return; b.hp -= dmg;
+  if (!b.alive) return; b.hp -= dmg; b.hurtT = 4;
   if (b.hp <= 0) kill(b, by);
 }
 function kill(b, by){
@@ -201,7 +201,8 @@ function think(b, dt){
   if (b.scanT <= 0){ b.scanT = .3 + Math.random()*.15;
     let best = null, bd = Infinity;
     // anfallare pressar mot högkvarteret: de tar bara strid med fiender på nära håll (förut fastnade båda lagen i eldstrid på mitten)
-    const reach = b.role === 'attack' ? Math.min(b.K.range, 35) : b.K.range;
+    // (men besvarar eld på full räckvidd en stund efter att ha blivit beskjutna)
+    b.hurtT = Math.max(0, (b.hurtT || 0) - .35); const reach = b.role === 'attack' && !(b.hurtT > 0) ? Math.min(b.K.range, 45) : b.K.range;
     for (const t of enemiesOf(b)){ const d = Math.hypot(t.x - b.pos.x, t.z - b.pos.z); if (d > (t.kind === 'def' ? b.K.range : reach) || d > bd) continue; if (canSee(b, t)){ best = t; bd = d; } }
     if (best && (!b.tgt || b.tgt.ref !== best.ref || b.tgt.kind !== best.kind)) b.seen = 0;
     b.tgt = best;
@@ -274,7 +275,7 @@ export function updateBots(dt){
     think(b, dt);
     // fiendens minor, claymore och snubbeltråd utlöses av soldater också
     for (const d of DEF.list){ if (!d.alive || !d.it || !d.it.side || d.it.side === b.team) continue;
-      if ((d.kind === 'mine' && Math.hypot(b.pos.x - d.pos.x, b.pos.z - d.pos.z) < 1.1) || (d.kind === 'claymore' && d.arm > .5 && clayInCone(d, b.pos.x, b.pos.z)) || (d.kind === 'snubbel' && Math.abs(b.pos.x - d.pos.x) < d.w/2 + .2 && Math.abs(b.pos.z - d.pos.z) < d.d/2 + .3)) defTrigger(d);
+      if ((d.kind === 'mine' && Math.hypot(b.pos.x - d.pos.x, b.pos.z - d.pos.z) < 1.1) || (d.kind === 'claymore' && (d.armT || 0) > .5 && clayInCone(d, b.pos.x, b.pos.z)) || (d.kind === 'snubbel' && Math.abs(b.pos.x - d.pos.x) < d.w/2 + .2 && Math.abs(b.pos.z - d.pos.z) < d.d/2 + .3)) defTrigger(d);
       if (d.kind === 'wire' && Math.abs(b.pos.x - d.pos.x) < d.w/2 + .2 && Math.abs(b.pos.z - d.pos.z) < d.d/2 + .3){ hurt(b, 8*dt, 'TAGGTRÅD'); b.pos.x -= Math.sin(b.yaw)*SPEED*.7*dt; b.pos.z -= Math.cos(b.yaw)*SPEED*.7*dt; }
     }
     // modell och kolliderare följer

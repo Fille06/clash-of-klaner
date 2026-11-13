@@ -50,7 +50,7 @@ function handle(m){
     case 'bots': if (!NET.host && Array.isArray(d.l)) botProxySync(d.l.map(r => ({ id: r[0], team: localTeam(r[1]), kind: r[2], x: r[3], z: r[4], yaw: r[5], hp: r[6], alive: !!r[7], moving: !!r[8], fire: !!r[9] }))); break;
     case 'tk': if (!NET.host){ BOTS.tickets.us = d[NET.team] ?? BOTS.tickets.us; BOTS.tickets.them = d[other(NET.team)] ?? BOTS.tickets.them; for (const k of ['A', 'B']) if (d['hq' + k] && BOTS.hq[localTeam(k)]) BOTS.hq[localTeam(k)].dead = true; } break;
     case 'end': if (!NET.host && NET.ui.onEnd){ const w = d.winner === null ? null : d.winner === NET.team; NET.ui.onEnd(w, whyText(d.code, w) || String(d.why || '').slice(0, 120)); } break;
-    case 'left': { const nm = NET.peers.get(from)?.name || 'En spelare'; peerRemove(from); hudFeed(nm, '', 'LÄMNADE'); } break;
+    case 'left': { const nm = NET.peers.get(from)?.name || 'En spelare', info = (NET.start.players || []).find(x => x.id === from); peerRemove(from); hudFeed(nm, '', 'LÄMNADE'); if (NET.host && info && BOTS.on && NET.ui.replace) NET.ui.replace(localTeam(info.team)); } break;
   }
 }
 
@@ -80,7 +80,7 @@ export function netBegin(){
   NET.on = true; NET.peers.clear(); BOTS.peers = [];
   // krokar: mina sprängningar och skott på byggnader skickas till de andra
   // laget skickas med (A/B) så att mottagarna inte skadar avsändarlagets egna soldater
-  NETHOOK.boom = (p, r, dmg, k, n, br, seed, team) => { if (!NET.applying) ev('boom', { p: [p.x, p.y, p.z].map(v => Math.round(v*100)/100), r, dmg, k, n: n ? [n.x, n.y, n.z] : null, br: !!br, seed, team: team === 'us' ? NET.team : team === 'them' ? other(NET.team) : null }); };
+  NETHOOK.boom = (p, r, dmg, k, n, br, seed, team) => { if (!NET.applying) ev('boom', { p: [p.x, p.y, p.z].map(v => Math.round(v*100)/100), r, dmg, k, n: n ? [n.x, n.y, n.z] : null, br: !!br, seed, team: team === 'us' || team === 'pl' ? NET.team : team === 'them' ? other(NET.team) : null }); };
   NETHOOK.cell = (c, dmg) => { const bi = DS.list.indexOf(c.b), ci = c.b.cells.indexOf(c); if (bi >= 0 && ci >= 0) ev('cell', { b: bi, c: ci, dmg: Math.round(dmg) }); };
   BOTS.onProxyHit = (id, dmg) => ev('hit', { to: 'host', bot: id, dmg: Math.round(dmg) });
 }

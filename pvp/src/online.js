@@ -28,7 +28,7 @@ export function onlineScreen(back){
   const note = (s, ok) => { const el = $('oNote'); if (!el) return; el.textContent = s; el.style.color = ok ? 'var(--gr)' : ''; };
   $('oBack').onclick = () => { if (NET.room) netSend({ t: 'r3Leave' }); back(); };
   NET.ui.onError = msg => note(msg);
-  NET.ui.onClosed = reason => { note(reason || 'Rummet stängdes'); $('oRoom').style.display = 'none'; if (NET.ws) $('oLobby').style.display = ''; };
+  NET.ui.onClosed = reason => { note(reason || 'Rummet stängdes'); if ($('oRoom')) $('oRoom').style.display = 'none'; if (NET.ws && $('oLobby')) $('oLobby').style.display = ''; };
   NET.ui.onRoom = room => renderRoom(room, slots);
   NET.ui.onStart = msg => { note('Matchen startar…', true); startOnline(msg).catch(e => note('Kunde inte starta: ' + e.message)); };
   NET.ui.onEnd = (win, why) => endFromHost(win, why);
@@ -47,8 +47,9 @@ export function onlineScreen(back){
 }
 
 function renderRoom(room, slots){
-  $('oLobby').style.display = 'none';
-  const el = $('oRoom'); el.style.display = '';
+  // online-skärmen kan vara stängd (t.ex. efter matchslut) – då finns inget att rita
+  const el = $('oRoom'); if (!el || !$('oLobby')) return;
+  $('oLobby').style.display = 'none'; el.style.display = '';
   const me = room.members.find(x => x.id === NET.me) || {}, host = room.host === NET.me, S = room.settings;
   const team = t => `<div class="rteam ${t}"><b>LAG ${t}${S.mode === 'fma' ? (S.defender === t ? ' · FÖRSVARAR' : ' · ANFALLER') : ''}</b>${room.members.filter(x => x.team === t).map(x => `<div>${esc(x.name)}${x.id === room.host ? ' ★' : ''}${x.id === NET.me ? ' (du)' : ''} <small>${x.ready || x.id === room.host ? '✔' : '…'}${x.hasBase ? ' · bas' : ''}</small></div>`).join('')}<div class="ai">${Math.max(0, S.size - room.members.filter(x => x.team === t).length)} AI</div></div>`;
   el.innerHTML = `<div class="rcode">RUM <b>${esc(room.code)}</b> <small>${S.mode === 'bmb' ? 'BAS MOT BAS' : 'FÖRSVAR MOT ANFALL'} · ${S.size} MOT ${S.size} · AI ${S.diff.toUpperCase()}</small></div>
