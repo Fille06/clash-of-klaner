@@ -5,6 +5,8 @@ import { DS } from './destruct.js';
 import { fx, FX } from './fx.js';
 import { PL, TARGETS } from './player.js';
 import { defReset } from './defense.js';
+import { PARTS, partsStop } from './parts.js';
+import { BOTS } from './bots.js';
 
 export const W = { keep: null, map: null };
 // kom ihåg vad som alltid ska finnas kvar (kamera, ljus, himmel, partiklar, dekaler)
@@ -15,5 +17,5 @@ export function resetWorld(){
   PH.owner.clear(); PH.dyn.length = 0; PH.acc = 0;
   DS.list.length = 0; DS.sections.length = 0; DS.sinks.length = 0; DS.falls.length = 0; DS.debris = 0;
   PL.body = null; PL.cc = null; PL.col = null; PL.charges.length = 0; PL.nades.length = 0; PL.rockets.length = 0;
-  TARGETS.length = 0; defReset(); FX.groundAt = null; fx.reset(); E.fogTarget = 0; E.fogBoost = 0;
+  TARGETS.length = 0; defReset(); PARTS.list.length = 0; partsStop(); BOTS.list.length = 0; BOTS.on = false; BOTS.nav = null; FX.groundAt = null; fx.reset(); E.fogTarget = 0; E.fogBoost = 0;
 }

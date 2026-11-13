@@ -70,6 +70,8 @@ export class Building {
       for (let k = 0; k < NZ; k++) for (let i = 0; i < NX; i++){
         const edgeX = i === 0 || i === NX - 1, edgeZ = k === 0 || k === NZ - 1, edge = edgeX || edgeZ;
         if (slab){ if (edge || !S.open) this.add(i, j, k, edge ? S.wall : 'slab'); continue; }
+        // plattform på pelare: bara 1×1 m pelare i hörnen och var fjärde meter längs kanten, fritt under taket
+        if (S.stilts){ const pi = i < 2 || i >= NX - 2 || (i % 8 < 2 && i > 1 && i < NX - 2), pk = k < 2 || k >= NZ - 2 || (k % 8 < 2 && k > 1 && k < NZ - 2); if (pi && pk && (edge || (i % 8 < 2 && k % 8 < 2))) this.add(i, j, k, 'col'); continue; }
         if (edge){
           const corner = edgeX && edgeZ, u = edgeX ? k : i, n = edgeX ? NZ : NX;
           // dörr på bottenvåningen mitt på framsidan (k = 0) och baksidan
@@ -103,8 +105,27 @@ export class Building {
     }
     this.total = {}; for (const c of this.cells) this.total[this.floorOf(c)] = (this.total[this.floorOf(c)] || 0) + (this.bearing(c) ? 1 : 0);
   }
+  // STAPLING: byggnaden står på taket av andra byggnader. Den är förankrad bara där taket under finns kvar,
+  // så när underliggande byggnad sprängs eller rasar faller allt som står ovanpå.
+  setSupport(list){
+    if (this.on) for (const B of this.on) if (B.deps){ const i = B.deps.indexOf(this); if (i >= 0) B.deps.splice(i, 1); }
+    this.on = list && list.length ? list.slice() : null;
+    if (this.on) for (const B of this.on) (B.deps || (B.deps = [])).push(this);
+    this.dirty = true;
+  }
+  // står cellen (i bottenlagret) på ett tak som finns kvar?
+  grounded(c){
+    if (!this.on) return true;
+    const p = this.pos(c, v3), px = p.x, pz = p.z;
+    for (const B of this.on){
+      const s = B.s.c, i = Math.floor((px - B.origin.x)/s), k = Math.floor((pz - B.origin.z)/s), top = B.at(i, B.NY - 1, k);
+      if (top && top.alive && !DS.falls.some(f => f.b === B)) return true;
+    }
+    return false;
+  }
   // ta bort hela byggnaden (basbyggaren: riv)
   dispose(){
+    this.setSupport(null); if (this.deps){ for (const d of this.deps.slice()) d.setSupport((d.on || []).filter(B => B !== this)); this.deps = null; }
     for (const t in this.meshes) E.scene.remove(this.meshes[t]); if (this.sign) E.scene.remove(this.sign);
     for (const c of this.cells){ if (c.col) PH.owner.delete(c.col.handle); if (c.bits) for (const m of c.bits) E.scene.remove(m); }
     PH.world.removeRigidBody(this.body); const i = DS.list.indexOf(this); if (i >= 0) DS.list.splice(i, 1);
@@ -132,6 +153,7 @@ export class Building {
   }
   kill(c, from, quiet){
     if (!c.alive) return; c.alive = false; if (c.bits){ for (const m of c.bits) E.scene.remove(m); c.bits = null; } c.mesh.setMatrixAt(c.n, zero); c.mesh.instanceMatrix.needsUpdate = true; removeCollider(c.col); c.col = null; this.dirty = true;
+    if (this.deps) for (const d of this.deps) d.dirty = true;
     if (quiet) return;
     const p = this.pos(c), s = this.s.c;
     if (c.t === 'glass'){ const nx = c.axis === 'x' ? Math.sign(p.x - (from ? from.x : p.x - 1)) || 1 : 0, nz = c.axis === 'z' ? Math.sign(p.z - (from ? from.z : p.z - 1)) || 1 : 0; fx.glass(p.x, p.y, p.z, nx, nz, 10); return; }
@@ -159,7 +181,7 @@ export class Building {
     if (from >= 0) for (const c of this.cells) if (c.alive && c.j >= from*L + 1) fall.add(c);
     // sammanhang: flodfyllning från cellerna som står på marken
     const seen = new Set(), st = [];
-    for (const c of this.cells) if (c.alive && c.j === 1 && !fall.has(c)){ seen.add(c); st.push(c); }
+    for (const c of this.cells) if (c.alive && c.j === 1 && !fall.has(c) && this.grounded(c)){ seen.add(c); st.push(c); }
     while (st.length){ const c = st.pop(); for (const [di, dj, dk] of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]]){ const n = this.at(c.i + di, c.j + dj, c.k + dk); if (n && n.alive && !seen.has(n) && !fall.has(n)){ seen.add(n); st.push(n); } } }
     for (const c of this.cells) if (c.alive && !seen.has(c)) fall.add(c);
     if (fall.size) this.collapse([...fall]);

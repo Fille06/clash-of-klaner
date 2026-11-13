@@ -118,3 +118,24 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0f12; fon
 #death .dt { font-size: 46px; font-weight: 700; letter-spacing: .3em; color: #ff4a3a; }
 #death .db { font-size: 18px; font-weight: 600; letter-spacing: .14em; margin-top: 6px; } #death .db b { color: var(--or); }
 #death .dr { font-size: 14px; letter-spacing: .2em; opacity: .75; margin-top: 10px; }
+
+/* många byggdelar per flik: lite tätare knappar */
+#bui .many .bi { min-width: 0; padding: 6px 9px; font-size: 13px; }
+#bui .many .bi small { font-size: 10px; }
+
+/* lägesinställningar och resultat */
+#menu .setup { display: flex; flex-direction: column; gap: 10px; width: min(520px, 92vw); margin-top: 18px; pointer-events: auto; }
+#menu .setup label { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 14px; font-weight: 700; letter-spacing: .12em; }
+#menu .setup select, #menu .setup input { background: rgba(6,12,16,.85); color: #fff; border: 1px solid var(--ln); padding: 7px 9px; font: inherit; letter-spacing: .06em; min-width: 240px; }
+#menu .setup .row { display: flex; gap: 10px; } #menu .setup .row .it { flex: 1; }
+#menu .setup .note { color: var(--or); min-height: 18px; font-size: 13px; letter-spacing: .1em; }
+#menu .result { margin: 10px 0 0; padding: 10px 18px; border: 1px solid var(--ln); background: rgba(6,12,16,.8); text-align: center; letter-spacing: .14em; }
+#menu .result b { display: block; font-size: 26px; } #menu .result.win b { color: var(--gr); } #menu .result.loss b { color: var(--or); }
+#menu .result small { font-size: 13px; opacity: .8; }
+
+/* online-rum */
+#menu .rcode { font-size: 14px; letter-spacing: .14em; } #menu .rcode b { font-size: 24px; color: var(--cy); margin: 0 8px; } #menu .rcode small { opacity: .7; }
+#menu .rteams { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 8px 0; }
+#menu .rteam { border: 1px solid var(--ln); padding: 8px 10px; background: rgba(6,12,16,.7); font-size: 13px; letter-spacing: .08em; }
+#menu .rteam b { display: block; margin-bottom: 4px; } #menu .rteam.A b { color: #6fb6ff; } #menu .rteam.B b { color: #ff8a70; }
+#menu .rteam small { opacity: .7; } #menu .rteam .ai { opacity: .55; font-size: 12px; margin-top: 4px; }

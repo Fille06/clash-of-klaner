@@ -6,8 +6,9 @@ import { E, pbr, tex } from './engine.js';
 import { R, PH } from './physics.js';
 import { FX } from './fx.js';
 
-const HALF = 80, N = HALF*2 + 1, ED = 40, NE = ED*2 + 1, FC = 2, FN = HALF*2/FC;
-export const T = { h: new Float32Array(N*N), f: new Uint8Array(FN*FN), sea: -1.2, feet: [], mesh: null, water: null, trees: null, col: null, undo: [], redo: [], dirtyF: false, seed: 7 };
+const ED = 40, NE = ED*2 + 1, FC = 2;
+let HALF = 80, N = HALF*2 + 1, FN = HALF*2/FC;
+export const T = { h: new Float32Array(N*N), f: new Uint8Array(FN*FN), plots: [{ x: 0, z: 0 }], sea: -1.2, feet: [], mesh: null, water: null, trees: null, col: null, undo: [], redo: [], dirtyF: false, seed: 7 };
 const id = (i, k) => k*N + i, fid = (i, k) => k*FN + i;
 const hash = (x, z, s = 0) => { const v = Math.sin(x*127.1 + z*311.7 + s*74.7)*43758.5453; return v - Math.floor(v); };
 const vnoise = (x, z) => { const xi = Math.floor(x), zi = Math.floor(z), fx = x - xi, fz = z - zi, u = fx*fx*(3 - 2*fx), w = fz*fz*(3 - 2*fz);
@@ -15,6 +16,14 @@ const vnoise = (x, z) => { const xi = Math.floor(x), zi = Math.floor(z), fx = x 
 const fbm = (x, z) => vnoise(x/23, z/23)*.6 + vnoise(x/9, z/9)*.3 + vnoise(x/4, z/4)*.1;
 const sstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a)/(b - a))); return t*t*(3 - 2*t); };
 export const editable = (x, z) => Math.abs(x) <= ED && Math.abs(z) <= ED;
+// MATCHKARTA: större terräng med flera tomter (bas mot bas). plots = tomternas mittpunkter; tomt 0 är alltid i origo.
+export function terSetup(half, plots){
+  HALF = half; N = HALF*2 + 1; FN = HALF*2/FC;
+  T.h = new Float32Array(N*N); T.f = new Uint8Array(FN*FN); T.plots = plots || [{ x: 0, z: 0 }];
+}
+export const terHalf = () => HALF;
+// avstånd utanför närmaste tomt (≤ 0 = på en tomt) och vilken tomt
+function plotDist(x, z){ let best = Infinity, pi = 0; T.plots.forEach((p, i) => { const d = Math.max(Math.abs(x - p.x) - ED, Math.abs(z - p.z) - ED); if (d < best){ best = d; pi = i; } }); return [best, pi]; }
 export const TER_ED = ED;
 
 // höjd i meter (bilinjär)
@@ -29,14 +38,17 @@ export const forestAt = (x, z) => { const i = Math.floor((x + HALF)/FC), k = Mat
 function outer(){
   const h = T.h;
   for (let k = 0; k < N; k++) for (let i = 0; i < N; i++){
-    const x = i - HALF, z = k - HALF, d = Math.max(Math.abs(x) - ED, Math.abs(z) - ED); if (d <= 0) continue;
-    const e = h[id(Math.max(HALF - ED, Math.min(HALF + ED, i)), Math.max(HALF - ED, Math.min(HALF + ED, k)))];
+    const x = i - HALF, z = k - HALF, [d, pi] = plotDist(x, z); if (d <= 0) continue;
+    const P = T.plots[pi], ci = Math.round(P.x) + HALF, ck = Math.round(P.z) + HALF;
+    const e = h[id(Math.max(ci - ED, Math.min(ci + ED, i)), Math.max(ck - ED, Math.min(ck + ED, k)))];
     const f = 1 - sstep(0, 26, d), amp = 7*sstep(2, 16, d)*(1 - sstep(30, 40, d));
     h[id(i, k)] = e*f + Math.max(0, fbm(x, z) - .25)*amp*1.6;
   }
   for (let k = 0; k < FN; k++) for (let i = 0; i < FN; i++){
-    const x = (i + .5)*FC - HALF, z = (k + .5)*FC - HALF; if (editable(x, z)) continue;
-    const d = Math.max(Math.abs(x) - ED, Math.abs(z) - ED); T.f[fid(i, k)] = d > 4 && vnoise(x/14 + 50, z/14) > .42 ? 1 : 0;
+    const x = (i + .5)*FC - HALF, z = (k + .5)*FC - HALF, [d] = plotDist(x, z); if (d <= 0) continue;
+    // mellan två tomter (bas mot bas) lämnas ett öppet stråk utan skog
+    const lane = T.plots.length > 1 && Math.abs(x) < 26 && z < T.plots[0].z && z > T.plots[T.plots.length - 1].z;
+    T.f[fid(i, k)] = !lane && d > 4 && vnoise(x/14 + 50, z/14) > .42 ? 1 : 0;
   }
 }
 // sparning: bara tomten. Höjder i 0,1 m (int16) + skog som bitar → komprimeras i baskoden
@@ -45,8 +57,30 @@ export function terSave(){
   const FE = ED*2/FC, F = new Uint8Array(Math.ceil(FE*FE/8)); for (let k = 0; k < FE; k++) for (let i = 0; i < FE; i++) if (T.f[fid(i + (HALF - ED)/FC, k + (HALF - ED)/FC)]) { const n = k*FE + i; F[n >> 3] |= 1 << (n & 7); }
   return { h: b64(new Uint8Array(H.buffer)), f: b64(F), sea: T.sea };
 }
-export function terLoad(s){
+// vrider en sparad terräng 180° (bas mot bas: basen på tomt 1 vänds så att fronten pekar mot fienden)
+export function terRot180(s){
+  if (!s || !s.h) return s;
+  const hb = unb64(s.h), H = new Int16Array(hb.buffer, hb.byteOffset, Math.floor(hb.length/2)), H2 = new Int16Array(H.length); for (let i = 0; i < H.length; i++) H2[i] = H[H.length - 1 - i];
+  const FE = ED*2/FC, n = FE*FE, F = unb64(s.f || ''), F2 = new Uint8Array(Math.ceil(n/8)); for (let i = 0; i < n; i++){ const j = n - 1 - i; if (F[i >> 3] & (1 << (i & 7))) F2[j >> 3] |= 1 << (j & 7); }
+  return { h: b64(new Uint8Array(H2.buffer)), f: b64(F2), sea: s.sea };
+}
+// kontrollerar en sparad terräng (baskoder kan komma från vem som helst): rätt längd, rimliga höjder och havsnivå
+export function terValid(s){
+  if (!s) return true;
+  if (typeof s !== 'object') return false;
+  if (s.sea != null && !(typeof s.sea === 'number' && Number.isFinite(s.sea) && s.sea >= -6 && s.sea <= 6)) return false;
+  try {
+    if (s.h != null){ const u = unb64(String(s.h)); if (u.length !== NE*NE*2) return false; const H = new Int16Array(u.buffer); for (let i = 0; i < H.length; i++) if (H[i] < -80 || H[i] > 220) return false; }
+    if (s.f != null){ const FE = ED*2/FC; if (unb64(String(s.f)).length > Math.ceil(FE*FE/8)) return false; }
+  } catch (e){ return false; }
+  return true;
+}
+export function terLoad(s, extra){
+  if (!terValid(s)) s = null;
   T.h.fill(0); T.f.fill(0); T.sea = s && s.sea != null ? s.sea : -1.2;
+  // fler tomter (bas mot bas): deras höjder läggs in på sina platser; havsnivån tas från tomt 0
+  for (let n = 1; n < T.plots.length; n++){ const e = extra && extra[n - 1]; if (!e || !terValid(e) || !e.h) continue; const H = new Int16Array(unb64(e.h).buffer), P = T.plots[n];
+    for (let k = 0; k < NE; k++) for (let i = 0; i < NE; i++){ const gi = i + HALF - ED + Math.round(P.x), gk = k + HALF - ED + Math.round(P.z); if (gi >= 0 && gk >= 0 && gi < N && gk < N) T.h[id(gi, gk)] = Math.max(H[k*NE + i]/10, T.sea - 2.5); } }
   if (s && s.h){ const H = new Int16Array(unb64(s.h).buffer); for (let k = 0; k < NE; k++) for (let i = 0; i < NE; i++) T.h[id(i + HALF - ED, k + HALF - ED)] = H[k*NE + i]/10;
     const FE = ED*2/FC, F = unb64(s.f || ''); for (let k = 0; k < FE; k++) for (let i = 0; i < FE; i++){ const n = k*FE + i; if (F[n >> 3] & (1 << (n & 7))) T.f[fid(i + (HALF - ED)/FC, k + (HALF - ED)/FC)] = 1; } }
   outer();
@@ -91,6 +125,13 @@ export function terBrush(tool, cx, cz, r, dt){
     else if (tool === 'plana') h[n] += (tgt - h[n])*Math.min(1, dt*6*f);
     else if (tool === 'vatten') h[n] += (T.sea - 1.8 - h[n])*Math.min(1, dt*3*f);
     else if (tool === 'radera') h[n] += (0 - h[n])*Math.min(1, dt*14*f);
+    // DIKE: gräv ner till 1,6 m under där du började (skyttegrav), VALL: bygg upp till 1,6 m över
+    else if (tool === 'dike'){ const g = tgt - 1.6; if (h[n] > g) h[n] += (g - h[n])*Math.min(1, dt*6*f); }
+    else if (tool === 'vall'){ const g = tgt + 1.6; if (h[n] < g) h[n] += (g - h[n])*Math.min(1, dt*6*f); }
+    // TERRASS: marken lägger sig i hela metersteg
+    else if (tool === 'terrass') h[n] += (Math.round(h[n]) - h[n])*Math.min(1, dt*5*f);
+    // KRATER: skålformad grop (2,5 m djup i mitten) med en liten vall runt kanten
+    else if (tool === 'krater'){ const q = d/r, g = q < .8 ? tgt - 2.5*(1 - (q/.8)**2) : tgt + .6*Math.sin((q - .8)/.2*Math.PI); h[n] += (g - h[n])*Math.min(1, dt*4); }
     else if (tool === 'jamna'){ const a = (src[id(Math.max(0, i - 1), k)] + src[id(Math.min(N - 1, i + 1), k)] + src[id(i, Math.max(0, k - 1))] + src[id(i, Math.min(N - 1, k + 1))])/4; h[n] += (a - h[n])*Math.min(1, dt*8*f); }
     h[n] = Math.max(-8, Math.min(22, h[n]));
     if (h[n] < T.sea + .1){ const fi = Math.floor((x + HALF)/FC), fk = Math.floor((z + HALF)/FC); if (fi < FN && fk < FN && T.f[fid(fi, fk)]){ T.f[fid(fi, fk)] = 0; T.dirtyF = true; } }
@@ -173,17 +214,17 @@ function mergeG(list){ // enkel sammanslagning (samma attribut)
 }
 
 // bygg scenen för terrängen (efter resetWorld)
-export function buildTerrain(save){
-  terLoad(save); T.feet.length = 0; T.col = null; FX.groundAt = (x, z) => Math.max(hAt(x, z), T.sea);
+export function buildTerrain(save, extra){
+  terLoad(save, extra); T.feet.length = 0; T.col = null; FX.groundAt = (x, z) => Math.max(hAt(x, z), T.sea);
   const geo = new THREE.PlaneGeometry(HALF*2, HALF*2, N - 1, N - 1); geo.rotateX(-Math.PI/2);
   geo.setAttribute('tw', new THREE.BufferAttribute(new Float32Array(N*N*3), 3));
   T.mesh = new THREE.Mesh(geo, terMat()); T.mesh.receiveShadow = true; T.mesh.castShadow = true; E.scene.add(T.mesh);
   // marken runt omkring med ett hål för terrängen
-  const sh = new THREE.Shape(); sh.moveTo(-260, -260); sh.lineTo(260, -260); sh.lineTo(260, 260); sh.lineTo(-260, 260);
+  const RR = HALF + 180, sh = new THREE.Shape(); sh.moveTo(-RR, -RR); sh.lineTo(RR, -RR); sh.lineTo(RR, RR); sh.lineTo(-RR, RR);
   const hole = new THREE.Path(); hole.moveTo(-HALF + .02, -HALF + .02); hole.lineTo(-HALF + .02, HALF - .02); hole.lineTo(HALF - .02, HALF - .02); hole.lineTo(HALF - .02, -HALF + .02); sh.holes.push(hole);
   const rg = new THREE.ShapeGeometry(sh); rg.rotateX(-Math.PI/2); rg.setAttribute('tw', new THREE.BufferAttribute(new Float32Array(rg.attributes.position.count*3).map((v, i) => i % 3 === 0 ? 1 : 0), 3));
   const ring = new THREE.Mesh(rg, terMat()); ring.receiveShadow = true; E.scene.add(ring);
-  for (const [x, z, w, d] of [[0, -170, 260, 90], [0, 170, 260, 90], [-170, 0, 90, 80], [170, 0, 90, 80]]) PH.world.createCollider(R.ColliderDesc.cuboid(w, .5, d).setTranslation(x, -.5, z), PH.ground);
+  const RO = HALF + 90; for (const [x, z, w, d] of [[0, -RO, RO + 90, 90], [0, RO, RO + 90, 90], [-RO, 0, 90, HALF], [RO, 0, 90, HALF]]) PH.world.createCollider(R.ColliderDesc.cuboid(w, .5, d).setTranslation(x, -.5, z), PH.ground);
   T.water = new THREE.Mesh(new THREE.PlaneGeometry(HALF*2, HALF*2).rotateX(-Math.PI/2), waterMat()); T.water.position.y = T.sea; T.water.renderOrder = 2; E.scene.add(T.water);
   const tg = treeGeo(), MX = FN*FN;
   T.trees = [new THREE.InstancedMesh(tg.trunk, tg.bark, MX), new THREE.InstancedMesh(tg.crown, tg.leaf, MX)];

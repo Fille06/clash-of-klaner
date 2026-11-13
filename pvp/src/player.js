@@ -101,7 +101,7 @@ export function bindInput(canvas){
     if (e.code === 'KeyG') throwNade(); if (e.code === 'KeyX') placeCharge('breach'); if (e.code === 'KeyV') placeCharge('c4'); if (e.code === 'KeyF') detonate();
   });
   addEventListener('keyup', e => { PL.keys[e.code] = false; });
-  canvas.addEventListener('mousedown', e => { audioOn(); if (!PL.on) return; if (document.pointerLockElement !== canvas){ canvas.requestPointerLock(); return; } if (e.button === 0){ PL.trig = true; PL.trigNew = true; } if (e.button === 2) PL.aim = true; });
+  canvas.addEventListener('mousedown', e => { audioOn(); if (!PL.on) return; if (document.pointerLockElement !== canvas){ { const pl = canvas.requestPointerLock(); if (pl && pl.catch) pl.catch(() => {}); } return; } if (e.button === 0){ PL.trig = true; PL.trigNew = true; } if (e.button === 2) PL.aim = true; });
   addEventListener('mouseup', e => { if (e.button === 0) PL.trig = false; if (e.button === 2) PL.aim = false; });
   addEventListener('contextmenu', e => e.preventDefault());
   addEventListener('mousemove', e => { if (document.pointerLockElement !== canvas || !PL.on) return; const s = .0022*(PL.aim ? .55 : 1); PL.yaw -= e.movementX*s; PL.pitch = Math.max(-1.5, Math.min(1.5, PL.pitch - e.movementY*s)); });
@@ -124,11 +124,11 @@ function fire(dt){
   const h = ray(o, d, 400, PL.col); if (!h) return;
   const n = h.normal, p = h.point;
   if (h.owner && h.owner.b){
-    const c = h.owner, B = c.b; B.hit(c, W.dmg, o);
+    const c = h.owner, B = c.b; B.hit(c, W.dmg, o); if (NETHOOK.cell) NETHOOK.cell(c, W.dmg);
     if (c.t === 'glass'){ sfx.glass(); return; }
     fx.chips(p.x, p.y, p.z, n.x, n.y, n.z, 5, null); fx.dust(p.x, p.y, p.z, .35, 1);
     if (c.alive) fx.decal('hole', p, n, .09 + Math.random()*.05);
-  } else if (h.owner && h.owner.target){ h.owner.target.hit(W.dmg, p); PL.hits = .25; }
+  } else if (h.owner && h.owner.target){ h.owner.target.hit(W.dmg, p, 'pl'); PL.hits = .25; }
   else { fx.chips(p.x, p.y, p.z, n.x, n.y, n.z, 4, '#5a5650'); fx.dust(p.x, p.y, p.z, .3, 1); fx.decal('hole', p, n, .09); }
 }
 function fireRocket(o, d){
@@ -158,11 +158,16 @@ function placeCharge(kind){
 function detonate(){
   if (!PL.charges.length) return;
   for (const c of PL.charges){ E.scene.remove(c.m); const p = c.p.clone().addScaledVector(c.n, -.3);
-    if (c.kind === 'breach') explode(p, 1.3, 1700, .7, c.n, true); else explode(p, 2.4, 2600, 1.3, c.n); }
+    if (c.kind === 'breach') explode(p, 1.3, 1700, .7, c.n, true, true); else explode(p, 2.4, 2600, 1.3, c.n, false, true); }
   PL.charges.length = 0;
 }
-export function explode(p, r, dmg, k, n, breach){
-  blast(p, r, dmg, breach); fx.explosion(p.x, p.y, p.z, k); sfx.boom(k, p.distanceTo(E.cam.position));
+// nätverkskrokar (sätts av net.js): mina sprängningar och skott på byggnader skickas till de andra spelarna
+export const NETHOOK = { boom: null, cell: null };
+export function explode(p, r, dmg, k, n, breach, net, team, seed){
+  // online: sprängningens slump styrs av ett frö som följer med i nätverket, så att samma celler förstörs hos alla
+  if (seed == null && net && NETHOOK.boom) seed = (Math.random()*2147483647) | 0;
+  if (net && NETHOOK.boom) NETHOOK.boom(p, r, dmg, k, n, breach, seed, team);
+  if (seed != null){ let s = (seed >>> 0) || 1; const R0 = Math.random; Math.random = () => (s = (s*16807) % 2147483647)/2147483647; try { blast(p, r, dmg, breach); } finally { Math.random = R0; } } else blast(p, r, dmg, breach); fx.explosion(p.x, p.y, p.z, k); sfx.boom(k, p.distanceTo(E.cam.position));
   const h = ray({ x: p.x, y: p.y + .5, z: p.z }, { x: 0, y: -1, z: 0 }, 1.5); if (h) fx.decal('scorch', h.point, h.normal, 2.4*k);
   // brännmärke bara på en yta som finns kvar efter sprängningen
   if (n){ const o = p.clone().addScaledVector(n, .8), hb = breach ? null : ray(o, { x: -n.x, y: -n.y, z: -n.z }, 1.6); if (hb && hb.owner && hb.owner.b) fx.decal('scorch', hb.point, hb.normal, 1.6*k);
@@ -170,8 +175,9 @@ export function explode(p, r, dmg, k, n, breach){
     if (breach){ const up = new THREE.Vector3(0, 1, 0), side = new THREE.Vector3().crossVectors(up, n).normalize();
       for (let i = 0; i < 8; i++){ const a = i/8*6.283 + Math.random()*.4, rr = r*(1.0 + Math.random()*.3), q = p.clone().addScaledVector(n, .9).addScaledVector(side, Math.cos(a)*rr).addScaledVector(up, Math.sin(a)*rr*1.25), h2 = ray(q, { x: -n.x, y: -n.y, z: -n.z }, 1.8); if (h2 && h2.owner && h2.owner.b && h2.owner.t !== 'glass' && h2.toi < 1.05) fx.decal('scorch', h2.point, h2.normal, 2.2 + Math.random()*.8); }
       let t = 0; const iv = setInterval(() => { fxP(0, p.x + n.x*.7 + (Math.random() - .5), p.y - .3 + Math.random(), p.z + n.z*.7 + (Math.random() - .5), { vy: 1 + Math.random(), vx: n.x*.4, vz: n.z*.4, life: 3 + Math.random()*2, s0: .5, s1: 2.6, a: .35, c0: new THREE.Color('#8a8680'), c1: new THREE.Color('#b8b4ac'), drag: .4 }); if ((t += .25) > 6) clearInterval(iv); }, 250); } }
-  const d = p.distanceTo(PL.body.translation()); if (d < r*2.4){ PL.hp -= Math.max(0, (1 - d/(r*2.4)))*90*k; PL.dmgT = .6; PL.lastHit = { by: PL.nextCause || 'EXPLOSION', x: p.x, z: p.z }; PL.hurtFrom = { x: p.x, z: p.z, t: 1.2 }; } PL.nextCause = null; PL.shake = Math.max(PL.shake || 0, Math.max(0, 1.4 - d/40)*k);
-  for (const t of TARGETS) if (t.alive && t.pos.distanceTo(p) < r*2.2) t.hit(300, p);
+  const d = p.distanceTo(PL.body.translation()); if (d < r*2.4 && team !== 'us'){ PL.hp -= Math.max(0, (1 - d/(r*2.4)))*90*k; PL.dmgT = .6; PL.lastHit = { by: PL.nextCause || 'EXPLOSION', x: p.x, z: p.z }; PL.hurtFrom = { x: p.x, z: p.z, t: 1.2 }; } PL.nextCause = null; PL.shake = Math.max(PL.shake || 0, Math.max(0, 1.4 - d/40)*k);
+  // lagets egna sprängningar skadar inte lagkamrater (ingen vådabeskjutning från egna ingenjörer och RPG)
+  for (const t of TARGETS) if (t.alive && t.pos.distanceTo(p) < r*2.2 && !(team && t.bot && t.bot.team === team)) t.hit(300, p);
 }
 export const TARGETS = [];
 function msg(s){ PL.msg = s; PL.msgT = 2.2; }
@@ -217,13 +223,13 @@ export function updatePlayer(dt){
     const r = PL.rockets[i]; r.t += dt; const step = r.v.clone().multiplyScalar(dt), len = step.length(), dir = step.clone().normalize();
     const h = ray(r.m.position, dir, len, PL.col);
     fx.smoke(r.m.position.x, r.m.position.y, r.m.position.z, .25, false); fx.fire(r.m.position.x, r.m.position.y, r.m.position.z, .25);
-    if (h || r.t > 4){ const p = h ? new THREE.Vector3(h.point.x, h.point.y, h.point.z) : r.m.position.clone(); E.scene.remove(r.m); PL.rockets.splice(i, 1); explode(p, 2.2, 1500, 1.2, h ? new THREE.Vector3(h.normal.x, h.normal.y, h.normal.z) : null); continue; }
+    if (h || r.t > 4){ const p = h ? new THREE.Vector3(h.point.x, h.point.y, h.point.z) : r.m.position.clone(); E.scene.remove(r.m); PL.rockets.splice(i, 1); explode(p, 2.2, 1500, 1.2, h ? new THREE.Vector3(h.normal.x, h.normal.y, h.normal.z) : null, false, true); continue; }
     r.m.position.add(step); r.v.y -= 1.5*dt;
   }
   // granater
   for (let i = PL.nades.length - 1; i >= 0; i--){
     const g = PL.nades[i], tr = g.b.translation(); g.m.position.set(tr.x, tr.y, tr.z); g.t -= dt;
-    if (g.t <= 0){ E.scene.remove(g.m); w.removeRigidBody(g.b); PL.nades.splice(i, 1); explode(new THREE.Vector3(tr.x, tr.y + .1, tr.z), 3.2, 340, .8); }
+    if (g.t <= 0){ E.scene.remove(g.m); w.removeRigidBody(g.b); PL.nades.splice(i, 1); explode(new THREE.Vector3(tr.x, tr.y + .1, tr.z), 3.2, 340, .8, null, false, true); }
   }
   if (PL.hp < 100) PL.hp = Math.min(100, PL.hp + dt*(PL.dmgT > 0 ? 0 : 6)); PL.dmgT = Math.max(0, (PL.dmgT || 0) - dt);
   if (PL.hp <= 0){ PL.hp = 0; PL.deadT = 4; PL.deadY = E.cam.position.y - 1.2; const t = PL.body.translation(), L = PL.lastHit || { by: 'OKÄND' }; PL.death = { by: L.by, d: L.x != null ? Math.round(Math.hypot(L.x - t.x, L.z - t.z)) : null }; if (PL.vm) PL.vm.visible = false; PL.msg = null; return; }
