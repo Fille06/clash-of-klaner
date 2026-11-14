@@ -1,7 +1,8 @@
 // HUD i BF4-stil: minikarta med lagpoäng och flaggor, trupplista, vapenpanel, kompass, sikte, träffmarkör, mål-markörer i världen.
 import * as THREE from 'three';
 import { E } from './engine.js';
-import { PL, WEAPONS, GADGETS } from './player.js';
+import { PL, WEAPONS, GADGETS, CLASSES, CLASS_KEYS, NADES, GAD_NAME } from './player.js';
+import { CL } from './classes.js';
 import { DS } from './destruct.js';
 import { MAP } from './map.js';
 import { DEF } from './defense.js';
@@ -19,8 +20,9 @@ export function initHud(o = {}){
   <div id="mmw"><div id="mmtop"><div id="flags"></div><div id="tick"><span class="t us" id="tu"></span><span class="bar"><i class="b1" id="tb1"></i><i class="b2" id="tb2"></i></span><span class="t cn" id="tc"></span></div></div>
     <div id="mmbox"><canvas id="mm" width="236" height="236"></canvas></div><div id="squad"></div></div>
   <div id="wp"><div id="wpn"></div><div id="ammo"><span id="mag"></span><span id="res"></span><span id="mode"></span></div><div id="gad"></div><div id="hpw"><span id="stance"></span><span id="hpn"></span><span class="hb"><i id="hpb"></i></span></div></div>
-  <div id="death"><div class="dt">DU DOG</div><div class="db" id="dby"></div><div class="dr" id="drs"></div></div>
-  <div id="keys">WASD GÅ · SHIFT SPRING · C DUCKA · 1/2 VAPEN · R LADDA · B ELDLÄGE · G GRANAT · X SPRÄNGLADDNING · V C4 · F SPRÄNG · ESC MENY</div>`;
+  <div id="death"><div class="dt">DU DOG</div><div class="db" id="dby"></div><div class="dr" id="drs"></div><div class="dc" id="dcls"></div></div>
+  <div id="scope"></div><div id="flashov"></div><div id="spots"></div><div id="clsn"></div>
+  <div id="keys">WASD GÅ · SHIFT SPRING · C DUCKA · 1/2 VAPEN · R LADDA · B ELDLÄGE · G GRANAT · X/V/Z PRYLAR · F SPRÄNG · Q SPOTTA · E BEMANNA · ESC MENY</div>`;
   // kompassens skala: 3 varv så att den kan rulla
   let s = ''; const px = 3.2;
   for (let d = -360; d <= 720; d += 5){ const x = (d + 360)*px; const lab = { 0: 'N', 90: 'Ö', 180: 'S', 270: 'V' }[((d % 360) + 360) % 360];
@@ -38,7 +40,13 @@ export function updateHud(dt){
   if (!H.el || H.el.classList.contains('hidden')) return;
   const W = WEAPONS[PL.slot], a = PL.ammo[PL.slot] || [0, 0];
   $('wpn').textContent = W.name; $('mag').textContent = PL.rel > 0 ? '––' : a[0]; $('res').textContent = '/ ' + a[1]; $('mode').textContent = W.modes[PL.mode[PL.slot]];
-  $('gad').innerHTML = `<span><i>G</i>GRANAT ${PL.gad.gren}</span><span><i>X</i>LADDNING ${PL.gad.breach}</span><span><i>V</i>C4 ${PL.gad.c4}</span>`;
+  { const C = CLASSES[PL.cls] || CLASSES.anfall, nn = NADES[PL.nade] || NADES.frag; let s = `<span><i>G</i>${nn.name.replace('GRANAT', '')} ${PL.gad.gren}</span>`;
+    for (const k of ['X', 'V', 'Z']){ const g = C.keys[k]; if (!g) continue; const n = g === 'defib' || g === 'repair' ? '' : ' ' + (PL.gad[g] ?? 0); s += `<span><i>${k}</i>${GAD_NAME[g]}${n}</span>`; }
+    if (H.gadS !== s){ H.gadS = s; $('gad').innerHTML = s; } $('clsn').textContent = C.name + ' · ' + C.sub; }
+  // prickskyttekikare, bländning och spottade fiender
+  { const sc = (WEAPONS[PL.slot] || {}).scope && (PL.aimK || 0) > .8 && !PL.gun && !(PL.deadT > 0); $('scope').style.display = sc ? 'block' : 'none'; $('xh').style.visibility = sc ? 'hidden' : ''; }
+  $('flashov').style.opacity = Math.min(1, CL.flashT/1.2);
+  { let s = ''; for (const sp of CL.spots){ v.set(sp.p.x, sp.p.y + sp.y + .9, sp.p.z).project(E.cam); if (v.z > 1 || Math.abs(v.x) > 1.05 || Math.abs(v.y) > 1.05) continue; s += `<i style="left:${(v.x*.5 + .5)*100}%;top:${(-v.y*.5 + .5)*100}%"></i>`; } if (H.spS !== s){ H.spS = s; $('spots').innerHTML = s; } }
   $('stance').textContent = PL.crouch > .5 ? '▂' : '▮'; H.kt = (H.kt || 0) + dt; $('keys').style.opacity = H.kt < 7 ? .6 : 0;
   const hp = Math.max(0, Math.round(PL.hp)); $('hpn').textContent = hp; $('hpb').style.width = hp + '%'; $('hpw').className = hp < 35 ? 'low' : '';
   // kompass
@@ -52,7 +60,8 @@ export function updateHud(dt){
   // träffriktning (BF4): röd båge mot den som skjuter
   const hf = PL.hurtFrom; if (hf && hf.t > 0 && PL.body){ hf.t -= dt; const t = PL.body.translation(), a = Math.atan2(hf.x - t.x, hf.z - t.z), rel = a - PL.yaw + Math.PI; $('hdir').style.transform = `rotate(${-rel}rad)`; $('hdir').style.opacity = Math.min(1, hf.t*1.5); } else $('hdir').style.opacity = 0;
   $('dmg').style.boxShadow = `inset 0 0 ${160}px rgba(170,0,0,${Math.min(.75, (1 - PL.hp/100)*.9)})`;
-  const dd = PL.deadT > 0; $('death').style.display = dd ? 'block' : 'none'; if (dd){ const D = PL.death || {}; $('dby').innerHTML = `DÖDAD AV <b>${D.by || 'OKÄND'}</b>${D.d != null ? ' · ' + D.d + ' M' : ''}`; $('drs').textContent = 'ÅTERUPPSTÅR OM ' + Math.ceil(PL.deadT); }
+  const dd = PL.deadT > 0; $('death').style.display = dd ? 'block' : 'none'; if (dd){ const D = PL.death || {}; $('dby').innerHTML = `DÖDAD AV <b>${D.by || 'OKÄND'}</b>${D.d != null ? ' · ' + D.d + ' M' : ''}`; $('drs').textContent = 'ÅTERUPPSTÅR OM ' + Math.ceil(PL.deadT);
+    $('dcls').innerHTML = CLASS_KEYS.map((k, i) => `<span class="${PL.nextCls === k ? 'on' : ''}"><i>${i + 1}</i>${CLASSES[k].name}<small>${CLASSES[k].sub}</small></span>`).join('') + `<span class="g"><i>T</i>${(NADES[PL.nade] || NADES.frag).name}</span>`; }
   $('xh').style.display = dd ? 'none' : ''; $('wp').style.opacity = dd ? .25 : 1;
   $('note').textContent = PL.msg || (PL.charges.length ? `[F] SPRÄNG ${PL.charges.length} LADDNING${PL.charges.length > 1 ? 'AR' : ''}` : '');
   if (H.pts){ H.pts.t -= dt; $('pts').textContent = H.pts.t > 0 ? H.pts.s : ''; }

@@ -12,6 +12,7 @@ import { W, markPersistent, resetWorld } from './world.js';
 import { BD, startBuilder, stopBuilder, bindBuilder, updateBuilder, loadSlots, buildPlot, rebuild, normBase } from './builder.js';
 import { T, terPhysics, terUpdate, hAt } from './terrain.js';
 import { DEF, defStart, defStop, updateDefense } from './defense.js';
+import { updateClasses } from './classes.js';
 import { DEV, devTick, bindDev, setDev } from './dev.js';
 import { updateProps } from './props.js';
 import { partsStart, partsStop, updateParts } from './parts.js';
@@ -91,7 +92,7 @@ function frame(dt, skipDraw){
   }
   devTick();
   if (G.state === 'build') updateBuilder(dt);
-  updatePlayer(dt); stepPhysics(dt); updateDestruct(dt); updateFx(dt); terUpdate(dt); updateDefense(dt); updateProps(dt); updateParts(dt); updateBots(dt); updateMatch(dt); updateHud(dt); if (!skipDraw) render(dt);
+  updatePlayer(dt); stepPhysics(dt); updateDestruct(dt); updateFx(dt); terUpdate(dt); updateDefense(dt); updateClasses(dt); updateProps(dt); updateParts(dt); updateBots(dt); updateMatch(dt); updateHud(dt); if (!skipDraw) render(dt);
   if (dt > 0) G.fps = (G.fps || 60)*.95 + (1/dt)*.05;
 }
 boot();

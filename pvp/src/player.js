@@ -10,21 +10,46 @@ import { blast } from './destruct.js';
 export const WEAPONS = {
   ak:  { name: 'AK-12', mag: 30, res: 150, rpm: 650, dmg: 34, spread: .0025, kick: .011, modes: ['AUTO', 'SINGEL'], reload: 2.3 },
   rpg: { name: 'RPG-7V2', mag: 1, res: 5, rpm: 30, dmg: 0, spread: 0, kick: .05, modes: ['SINGEL'], reload: 3.2, rocket: true },
+  // klassvapen (BF4-klasserna): kpist för ingenjören, kulspruta för understöd, prickskyttegevär och pistol för spanaren, granattillsats för anfall
+  pdw: { name: 'UMP-45', mag: 25, res: 125, rpm: 600, dmg: 26, spread: .004, kick: .008, modes: ['AUTO', 'SINGEL'], reload: 2.1 },
+  lmg: { name: 'M249', mag: 100, res: 300, rpm: 750, dmg: 28, spread: .006, kick: .012, modes: ['AUTO'], reload: 5.2 },
+  sniper: { name: 'SV-98', mag: 5, res: 30, rpm: 45, dmg: 95, spread: .0003, hip: .03, kick: .06, modes: ['SINGEL'], reload: 3.4, scope: true },
+  pistol: { name: 'M9', mag: 15, res: 60, rpm: 400, dmg: 24, spread: .004, kick: .01, modes: ['SINGEL'], reload: 1.6 },
+  gl: { name: 'M320 HE', mag: 1, res: 5, rpm: 30, dmg: 0, spread: 0, kick: .05, modes: ['SINGEL'], reload: 2.6, launcher: true },
 };
 export const GADGETS = { gren: { name: 'M67 GRANAT', n: 3 }, breach: { name: 'SPRÄNGLADDNING', n: 3 }, c4: { name: 'C4', n: 3 } };
+// BF4:s fyra klasser (läkaren är Anfall – ingen egen klass). Tangenter: 1/2 vapen, X/V/Z prylar, G granat, Q spotta.
+// Prylarna: med = förbandslåda, defib = defibrillator, breach = sprängladdning, repair = reparationsverktyg,
+// ammo = ammunitionslåda, c4, clay = claymore, sensor = rörelsesensor, beacon = radiofyr (återuppståndelse).
+export const CLASSES = {
+  anfall:   { name: 'ANFALL', sub: 'LÄKARE', w: ['ak', 'gl'], keys: { X: 'med', V: 'defib' }, gad: { med: 1 } },
+  ingenjor: { name: 'INGENJÖR', sub: 'PANSARVÄRN', w: ['pdw', 'rpg'], keys: { X: 'breach', V: 'repair' }, gad: { breach: 3 } },
+  understod:{ name: 'UNDERSTÖD', sub: 'AMMUNITION', w: ['lmg', 'pistol'], keys: { X: 'ammo', V: 'c4', Z: 'clay' }, gad: { ammo: 1, c4: 3, clay: 2 } },
+  spanare:  { name: 'SPANARE', sub: 'SPANING', w: ['sniper', 'pistol'], keys: { X: 'sensor', V: 'c4', Z: 'beacon' }, gad: { sensor: 2, c4: 2, beacon: 1 } },
+};
+export const CLASS_KEYS = ['anfall', 'ingenjor', 'understod', 'spanare'];
+export const NADES = { frag: { name: 'SPLITTERGRANAT', n: 3 }, smoke: { name: 'RÖKGRANAT', n: 2 }, flash: { name: 'BLÄNDGRANAT', n: 2 } };
+export const GAD_NAME = { med: 'FÖRBANDSLÅDA', defib: 'DEFIBRILLATOR', breach: 'SPRÄNGLADDNING', repair: 'REPARERA', ammo: 'AMMOLÅDA', c4: 'C4', clay: 'CLAYMORE', sensor: 'SENSOR', beacon: 'RADIOFYR' };
+const lsGet = k => { try { return localStorage.getItem(k); } catch (e){ return null; } };
 
-export const PL = { on: false, yaw: 0, pitch: 0, vy: 0, crouch: 0, hp: 100, keys: {}, slot: 'ak', ammo: {}, mode: {}, fireT: 0, rel: 0, kick: 0, sprint: false, charges: [], nades: [], rockets: [], gad: {}, hits: 0, msg: null, bob: 0 };
+export const PL = { cls: 'anfall', nextCls: CLASSES[lsGet('ck/klass')] ? lsGet('ck/klass') : 'anfall', nade: NADES[lsGet('ck/granat')] ? lsGet('ck/granat') : 'frag', slots: ['ak', 'gl'], on: false, yaw: 0, pitch: 0, vy: 0, crouch: 0, hp: 100, keys: {}, slot: 'ak', ammo: {}, mode: {}, fireT: 0, rel: 0, kick: 0, sprint: false, charges: [], nades: [], rockets: [], gad: {}, hits: 0, msg: null, bob: 0 };
 
 export function initPlayer(spawn){
   if (!spawn.re) PL.spawn = spawn;
+  // återuppståndelse vid gruppens radiofyr (spanaren) om den står kvar
+  if (spawn.re && PL.spawnAt){ const s = PL.spawnAt(); if (s) spawn = { ...spawn, ...s }; }
   const w = PH.world;
   if (PL.body){ w.removeRigidBody(PL.body); }
   PL.body = w.createRigidBody(R.RigidBodyDesc.kinematicPositionBased().setTranslation(spawn.x, spawn.y + 1, spawn.z));
   PL.col = own(w.createCollider(R.ColliderDesc.capsule(.55, .32), PL.body), { player: true });
   if (!PL.cc){ PL.cc = w.createCharacterController(.02); PL.cc.enableAutostep(.45, .2, true); PL.cc.enableSnapToGround(.35); PL.cc.setMaxSlopeClimbAngle(50*Math.PI/180); PL.cc.setApplyImpulsesToDynamicBodies(true); }
   for (const k in WEAPONS){ PL.ammo[k] = [WEAPONS[k].mag, WEAPONS[k].res]; PL.mode[k] = 0; }
-  for (const k in GADGETS) PL.gad[k] = GADGETS[k].n;
-  PL.hp = 100; PL.slowK = 1; PL.hurtFrom = null; PL.yaw = spawn.yaw || 0; PL.pitch = 0; PL.vy = 0; PL.on = true; PL.slot = 'ak';
+  // klassen väljs vid återuppståndelse (dödsskärmen: 1–4, T granat) och ger vapen och prylar
+  PL.cls = CLASSES[PL.nextCls] ? PL.nextCls : 'anfall'; const C = CLASSES[PL.cls]; PL.slots = C.w.slice(); if (PL.onClass) PL.onClass(PL.cls);
+  PL.gad = { gren: NADES[PL.nade].n, breach: 0, c4: 0, ...C.gad };
+  if (PL.gun && PL.mountExit) PL.mountExit();
+  PL.hp = 100; PL.slowK = 1; PL.hurtFrom = null; PL.yaw = spawn.yaw || 0; PL.pitch = 0; PL.vy = 0; PL.on = true; PL.slot = PL.slots[0]; PL.aim = false;
+  if (PL.rpgM){ PL.rpgM.visible = PL.slot === 'rpg' || PL.slot === 'gl'; PL.vm.children.forEach(o => { if (o !== PL.rpgM && o !== PL.flash) o.visible = !PL.rpgM.visible; }); }
   if (!PL.vm) makeViewmodel();
 }
 // tygstruktur (vävt mönster) som normalkarta, och slitage som grovhetskarta – målade i canvas
@@ -96,9 +121,17 @@ function makeViewmodel(){
 export function bindInput(canvas){
   addEventListener('keydown', e => {
     if (!PL.on) return; PL.keys[e.code] = true;
-    if (e.code === 'Digit1') swap('ak'); if (e.code === 'Digit2') swap('rpg');
+    // [E] bemanna/lämna ett eget stationärt vapen (defense.js); bemannad: övriga tangenter gäller inte
+    if (e.code === 'KeyE' && PL.onUse && PL.deadT <= 0) PL.onUse();
+    if (PL.gun) return;
+    // död: välj klass (1–4) och granat (T) till nästa liv
+    if (PL.deadT > 0){ const i = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(e.code); if (i >= 0){ PL.nextCls = CLASS_KEYS[i]; try { localStorage.setItem('ck/klass', PL.nextCls); } catch (x){} sfx.click(); }
+      if (e.code === 'KeyT'){ const L = Object.keys(NADES); PL.nade = L[(L.indexOf(PL.nade) + 1) % L.length]; try { localStorage.setItem('ck/granat', PL.nade); } catch (x){} sfx.click(); } return; }
+    if (e.code === 'Digit1') swap(PL.slots[0]); if (e.code === 'Digit2') swap(PL.slots[1]);
+    if (e.code === 'KeyQ' && PL.onSpot) PL.onSpot();
+    { const g = CLASSES[PL.cls].keys[e.code.slice(3)]; if (e.code.startsWith('Key') && g){ if (g === 'breach' || g === 'c4') placeCharge(g); else if (PL.onGadget) PL.onGadget(g); } }
     if (e.code === 'KeyR') reload(); if (e.code === 'KeyB'){ const W = WEAPONS[PL.slot]; PL.mode[PL.slot] = (PL.mode[PL.slot] + 1) % W.modes.length; sfx.click(); }
-    if (e.code === 'KeyG') throwNade(); if (e.code === 'KeyX') placeCharge('breach'); if (e.code === 'KeyV') placeCharge('c4'); if (e.code === 'KeyF') detonate();
+    if (e.code === 'KeyG') throwNade(); if (e.code === 'KeyF') detonate();
   });
   addEventListener('keyup', e => { PL.keys[e.code] = false; });
   canvas.addEventListener('mousedown', e => { audioOn(); if (!PL.on) return; if (document.pointerLockElement !== canvas){ { const pl = canvas.requestPointerLock(); if (pl && pl.catch) pl.catch(() => {}); } return; } if (e.button === 0){ PL.trig = true; PL.trigNew = true; } if (e.button === 2) PL.aim = true; });
@@ -106,7 +139,7 @@ export function bindInput(canvas){
   addEventListener('contextmenu', e => e.preventDefault());
   addEventListener('mousemove', e => { if (document.pointerLockElement !== canvas || !PL.on) return; const s = .0022*(PL.aim ? .55 : 1); PL.yaw -= e.movementX*s; PL.pitch = Math.max(-1.5, Math.min(1.5, PL.pitch - e.movementY*s)); });
 }
-function swap(k){ if (PL.slot === k) return; PL.slot = k; PL.rel = 0; PL.swapT = .35; PL.rpgM.visible = k === 'rpg'; PL.vm.children.forEach(o => { if (o !== PL.rpgM && o !== PL.flash) o.visible = k !== 'rpg'; }); }
+function swap(k){ if (!k || PL.slot === k) return; PL.slot = k; PL.rel = 0; PL.swapT = .35; PL.rpgM.visible = k === 'rpg' || k === 'gl'; PL.vm.children.forEach(o => { if (o !== PL.rpgM && o !== PL.flash) o.visible = !PL.rpgM.visible; }); }
 function reload(){ const W = WEAPONS[PL.slot], a = PL.ammo[PL.slot]; if (PL.rel > 0 || a[0] >= W.mag || a[1] <= 0) return; PL.rel = W.reload; PL.relMax = W.reload; }
 const eye = new THREE.Vector3(), fwd = new THREE.Vector3(), tmp = new THREE.Vector3();
 export function aimRay(){ E.cam.getWorldPosition(eye); E.cam.getWorldDirection(fwd); return [eye.clone(), fwd.clone()]; }
@@ -115,11 +148,12 @@ function fire(dt){
   if (PL.rel > 0 || PL.swapT > 0) return; if (a[0] <= 0){ if (PL.trigNew) { sfx.click(); reload(); } PL.trigNew = false; return; }
   const single = W.modes[PL.mode[PL.slot]] === 'SINGEL'; if (single && !PL.trigNew) return; PL.trigNew = false;
   if (PL.fireT > 0) return; PL.fireT = 60/W.rpm; a[0]--;
-  const [o, d] = aimRay(), moving = (PL.speed || 0) > .5, sp = W.spread*(PL.aim ? .35 : 1)*(moving ? 2.5 : 1)*(1 + PL.heat*2);
+  const [o, d] = aimRay(), moving = (PL.speed || 0) > .5, sp = (W.hip && (PL.aimK || 0) < .8 ? W.hip : W.spread*(PL.aim ? .35 : 1))*(moving ? 2.5 : 1)*(1 + PL.heat*2);
   d.x += (Math.random() - .5)*sp*2; d.y += (Math.random() - .5)*sp*2; d.z += (Math.random() - .5)*sp*2; d.normalize();
   PL.kick = 1; PL.pitch += W.kick*(PL.aim ? .6 : 1); PL.yaw += (Math.random() - .5)*W.kick*.5; PL.heat = Math.min(1, (PL.heat || 0) + .08);
   PL.flash.visible = true; PL.flashT = .04; PL.flashL.intensity = 30;
   if (W.rocket){ sfx.rocket(); fireRocket(o, d); if (a[0] <= 0) reload(); return; }
+  if (W.launcher){ sfx.shot(); fireGL(o, d); if (a[0] <= 0) reload(); return; }
   sfx.shot();
   const h = ray(o, d, 400, PL.col); if (!h) return;
   const n = h.normal, p = h.point;
@@ -136,12 +170,17 @@ function fireRocket(o, d){
   m.position.copy(o).addScaledVector(d, .8); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d); E.scene.add(m);
   PL.rockets.push({ m, v: d.clone().multiplyScalar(70), t: 0, o: o.clone() });
 }
+// granattillsats (M320 HE): granat i båge som exploderar vid träff
+function fireGL(o, d){
+  const m = new THREE.Mesh(new THREE.SphereGeometry(.03, 8, 6), new THREE.MeshStandardMaterial({ color: 0x8a7a40, roughness: .5 })); m.position.copy(o).addScaledVector(d, .8); E.scene.add(m);
+  PL.rockets.push({ m, v: d.clone().multiplyScalar(60), t: 0, o: o.clone(), gl: true });
+}
 function throwNade(){
   if (PL.gad.gren <= 0) return; PL.gad.gren--; const [o, d] = aimRay();
   const m = new THREE.Mesh(new THREE.SphereGeometry(.06, 10, 8), new THREE.MeshStandardMaterial({ color: 0x3a4a2a, roughness: .7 })); m.castShadow = true; E.scene.add(m);
   const b = PH.world.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(o.x + d.x*.6, o.y + d.y*.6, o.z + d.z*.6).setCcdEnabled(true));
   PH.world.createCollider(R.ColliderDesc.ball(.06).setDensity(3).setRestitution(.35).setFriction(.8), b);
-  b.setLinvel({ x: d.x*16, y: d.y*16 + 3, z: d.z*16 }, true); PL.nades.push({ m, b, t: 3.2 });
+  b.setLinvel({ x: d.x*16, y: d.y*16 + 3, z: d.z*16 }, true); PL.nades.push({ m, b, t: PL.nade === 'frag' ? 3.2 : 1.8, type: PL.nade });
 }
 // sprängladdning (R6) fäst på en vägg framför dig, C4 kan fästas överallt (pelare, golv)
 function placeCharge(kind){
@@ -162,6 +201,7 @@ function detonate(){
   PL.charges.length = 0;
 }
 // nätverkskrokar (sätts av net.js): mina sprängningar och skott på byggnader skickas till de andra spelarna
+const DEFW = new Set(['mine', 'clay', 'mortar', 'atgm', 'akan']);
 export const NETHOOK = { boom: null, cell: null, applying: false, host: null };
 export function explode(p, r, dmg, k, n, breach, net, team, seed){
   // online: sprängningens slump styrs av ett frö som följer med i nätverket, så att samma celler förstörs hos alla
@@ -170,7 +210,10 @@ export function explode(p, r, dmg, k, n, breach, net, team, seed){
   // skjutpositionen (o) följer med för RPG så att värden kontrollerar sikten därifrån, inte från där skytten står nu
   const w = PL.nextW, o = PL.nextO; PL.nextW = PL.nextO = null;
   if (net && NETHOOK.boom) NETHOOK.boom(p, r, dmg, k, n, breach, seed, team, w, o);
-  if (seed != null){ let s = (seed >>> 0) || 1; const R0 = Math.random; Math.random = () => (s = (s*16807) % 2147483647)/2147483647; try { blast(p, r, dmg, breach); } finally { Math.random = R0; } } else blast(p, r, dmg, breach); fx.explosion(p.x, p.y, p.z, k); sfx.boom(k, p.distanceTo(E.cam.position));
+  // online hos en klient: försvarens skott och minor skadar inte byggnader (bara värdens värld avgör det, se net.js)
+  if (net && NETHOOK.host === false && DEFW.has(w)) PL.noBuild = true;
+  const noBuild = PL.noBuild; PL.noBuild = false;
+  if (noBuild){} else if (seed != null){ let s = (seed >>> 0) || 1; const R0 = Math.random; Math.random = () => (s = (s*16807) % 2147483647)/2147483647; try { blast(p, r, dmg, breach); } finally { Math.random = R0; } } else blast(p, r, dmg, breach); fx.explosion(p.x, p.y, p.z, k); sfx.boom(k, p.distanceTo(E.cam.position));
   const h = ray({ x: p.x, y: p.y + .5, z: p.z }, { x: 0, y: -1, z: 0 }, 1.5); if (h) fx.decal('scorch', h.point, h.normal, 2.4*k);
   // brännmärke bara på en yta som finns kvar efter sprängningen
   if (n){ const o = p.clone().addScaledVector(n, .8), hb = breach ? null : ray(o, { x: -n.x, y: -n.y, z: -n.z }, 1.6); if (hb && hb.owner && hb.owner.b) fx.decal('scorch', hb.point, hb.normal, 1.6*k);
@@ -190,7 +233,7 @@ export function updatePlayer(dt){
   // död (BF4): kameran sjunker mot marken, dödsskärm med vem som dödade dig, sedan återuppståndelse
   if (PL.deadT > 0){ PL.deadT -= dt; PL.hp = 0; E.cam.position.y += (PL.deadY - E.cam.position.y)*Math.min(1, dt*3); E.cam.rotation.z += (.35 - E.cam.rotation.z)*Math.min(1, dt*2);
     if (PL.deadT <= 0){ PL.deadT = 0; E.cam.rotation.z = 0; if (PL.vm) PL.vm.visible = true; initPlayer({ ...PL.spawn, re: true }); } return; }
-  const k = PL.keys, w = PH.world;
+  const k = PL.gun ? {} : PL.keys, w = PH.world;
   // rörelse
   PL.crouch += ((k.KeyC || k.ControlLeft ? 1 : 0) - PL.crouch)*Math.min(1, dt*10);
   PL.sprint = !!k.ShiftLeft && !!k.KeyW && !PL.aim && PL.crouch < .3;
@@ -206,17 +249,19 @@ export function updatePlayer(dt){
   const nt = { x: t.x + mv.x, y: t.y + mv.y, z: t.z + mv.z }; PL.body.setNextKinematicTranslation(nt);
   PL.speed = Math.hypot(PL.vx, PL.vz); PL.bob += dt*PL.speed*(PL.sprint ? 1.4 : 1.8);
   // föll ut ur världen: räknas som en vanlig död (dödsskärm, 'dead' online, ammunition fylls på först vid återuppståndelsen)
-  if (nt.y < -30 && PL.hp > 0){ PL.hp = 0; PL.lastHit = { by: 'FALL' }; }
+  if (nt.y < -30 && PL.hp > 0){ PL.hp = 0; PL.dmgT = 1; PL.lastHit = { by: 'FALL' }; }
   // kamera
   const eyeH = 1.55 - .55*PL.crouch, sh = PL.shake || 0; PL.shake = Math.max(0, sh - dt*1.8);
   E.cam.position.set(nt.x + (Math.random() - .5)*sh*.12, nt.y + eyeH - .55 + Math.sin(PL.bob*2)*.025*Math.min(1, PL.speed/4), nt.z + (Math.random() - .5)*sh*.12);
   E.cam.rotation.set(PL.pitch, PL.yaw, 0, 'YXZ');
-  const fovT = PL.aim ? (PL.slot === 'rpg' ? 45 : 52) : PL.sprint ? 78 : 70; E.cam.fov += (fovT - E.cam.fov)*Math.min(1, dt*12); E.cam.updateProjectionMatrix();
+  const fovT = PL.aim ? (WEAPONS[PL.slot].scope ? 16 : PL.slot === 'rpg' || PL.slot === 'gl' ? 45 : 52) : PL.sprint ? 78 : 70; E.cam.fov += (fovT - E.cam.fov)*Math.min(1, dt*12); E.cam.updateProjectionMatrix();
+  // bemannat vapen: kameran och siktet följer vapnet (defense.js)
+  if (PL.gun && PL.mountUpdate) PL.mountUpdate(dt);
   followSun(nt);
   // vapen
   PL.fireT = Math.max(0, PL.fireT - dt); PL.heat = Math.max(0, (PL.heat || 0) - dt*1.5); PL.swapT = Math.max(0, (PL.swapT || 0) - dt);
   if (PL.rel > 0){ PL.rel -= dt; if (PL.rel <= 0){ const W = WEAPONS[PL.slot], a = PL.ammo[PL.slot], n = Math.min(W.mag - a[0], a[1]); a[0] += n; a[1] -= n; sfx.click(); } }
-  if (PL.trig && !PL.sprint) fire(dt);
+  if (PL.trig && !PL.sprint && !PL.gun) fire(dt);
   if (PL.flashT > 0){ PL.flashT -= dt; if (PL.flashT <= 0){ PL.flash.visible = false; PL.flashL.intensity = 0; } }
   PL.kick *= Math.exp(-dt*14);
   const aim = PL.aim ? 1 : 0; PL.aimK = (PL.aimK || 0) + (aim - (PL.aimK || 0))*Math.min(1, dt*12);
@@ -227,16 +272,18 @@ export function updatePlayer(dt){
   for (let i = PL.rockets.length - 1; i >= 0; i--){
     const r = PL.rockets[i]; r.t += dt; const step = r.v.clone().multiplyScalar(dt), len = step.length(), dir = step.clone().normalize();
     const h = ray(r.m.position, dir, len, PL.col);
-    fx.smoke(r.m.position.x, r.m.position.y, r.m.position.z, .25, false); fx.fire(r.m.position.x, r.m.position.y, r.m.position.z, .25);
-    if (h || r.t > 4){ const p = h ? new THREE.Vector3(h.point.x, h.point.y, h.point.z) : r.m.position.clone(); E.scene.remove(r.m); PL.rockets.splice(i, 1); PL.nextW = 'rpg'; PL.nextO = r.o; explode(p, 2.2, 1500, 1.2, h ? new THREE.Vector3(h.normal.x, h.normal.y, h.normal.z) : null, false, true, 'pl'); continue; }
-    r.m.position.add(step); r.v.y -= 1.5*dt;
+    if (!r.gl){ fx.smoke(r.m.position.x, r.m.position.y, r.m.position.z, .25, false); fx.fire(r.m.position.x, r.m.position.y, r.m.position.z, .25); }
+    if (h || r.t > 4){ const p = h ? new THREE.Vector3(h.point.x, h.point.y, h.point.z) : r.m.position.clone(); E.scene.remove(r.m); PL.rockets.splice(i, 1); PL.nextO = r.o; if (r.gl){ PL.nextW = 'gl'; explode(p, 2.6, 520, .9, h ? new THREE.Vector3(h.normal.x, h.normal.y, h.normal.z) : null, false, true, 'pl'); continue; } PL.nextW = 'rpg'; explode(p, 2.2, 1500, 1.2, h ? new THREE.Vector3(h.normal.x, h.normal.y, h.normal.z) : null, false, true, 'pl'); continue; }
+    r.m.position.add(step); r.v.y -= (r.gl ? 9.8 : 1.5)*dt;
   }
   // granater
   for (let i = PL.nades.length - 1; i >= 0; i--){
     const g = PL.nades[i], tr = g.b.translation(); g.m.position.set(tr.x, tr.y, tr.z); g.t -= dt;
+    if (g.t <= 0 && g.type !== 'frag' && PL.onNade){ E.scene.remove(g.m); w.removeRigidBody(g.b); PL.nades.splice(i, 1); PL.onNade(g.type, new THREE.Vector3(tr.x, tr.y + .1, tr.z)); continue; }
     if (g.t <= 0){ E.scene.remove(g.m); w.removeRigidBody(g.b); PL.nades.splice(i, 1); PL.nextW = 'gren'; explode(new THREE.Vector3(tr.x, tr.y + .1, tr.z), 3.2, 340, .8, null, false, true, 'pl'); }
   }
   if (PL.hp < 100) PL.hp = Math.min(100, PL.hp + dt*(PL.dmgT > 0 ? 0 : 6)); PL.dmgT = Math.max(0, (PL.dmgT || 0) - dt);
+  if (PL.hp <= 0 && PL.gun && PL.mountExit) PL.mountExit();
   if (PL.hp <= 0){ PL.hp = 0; PL.deadT = 4; PL.deadY = E.cam.position.y - 1.2; const t = PL.body.translation(), L = PL.lastHit || { by: 'OKÄND' }; PL.death = { by: L.by, d: L.x != null ? Math.round(Math.hypot(L.x - t.x, L.z - t.z)) : null }; if (PL.vm) PL.vm.visible = false; PL.msg = null; return; }
   PL.hits = Math.max(0, PL.hits - dt); if (PL.msgT > 0){ PL.msgT -= dt; if (PL.msgT <= 0) PL.msg = null; }
 }

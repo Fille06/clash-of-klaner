@@ -13,6 +13,7 @@ import { DS } from './destruct.js';
 import { DEF, defTrigger, clayInCone } from './defense.js';
 import { T, hAt } from './terrain.js';
 
+import { smokeBlocks } from './smoke.js';
 export const BOTS = { peers: [], onProxyHit: null, list: [], on: false, nav: null, navT: 0, hq: {}, spawns: {}, rally: {}, tickets: { us: 0, them: 0 }, diff: 'normal', onKill: null, onEvent: null, seq: 0 };
 const DIFF = { latt: { spread: .055, react: .9, dmg: 10 }, normal: { spread: .035, react: .55, dmg: 13 }, svar: { spread: .02, react: .3, dmg: 16 } };
 const KINDS = {
@@ -115,6 +116,11 @@ function kill(b, by){
   if (BOTS.tickets[b.team] > 0){ BOTS.tickets[b.team]--; b.respawn = 6; } else b.respawn = -1;
   BOTS.onKill && BOTS.onKill(b, by);
 }
+// defibrillatorn: en fallen soldat reser sig där den föll med 60 i hälsa (livet dras inte)
+export function botRevive(b){
+  if (b.alive) return; b.alive = true; b.target.alive = true; b.hp = 60; b.respawn = 0; b.tgt = null; b.plant = null;
+  b.M.g.rotation.set(0, b.yaw, 0); b.M.g.position.copy(b.pos); try { b.body.setTranslation({ x: b.pos.x, y: b.pos.y + .9, z: b.pos.z }, true); } catch (e){}
+}
 function respawn(b){
   b.push = false; b.wait = 0; b.rallyFor = null;
   const p = spawnPoint(b.team); b.pos.copy(p); b.hp = 100; b.alive = true; b.target.alive = true; b.path = null; b.tgt = null; b.plant = null; b.charges = b.K.charges || 0;
@@ -153,6 +159,7 @@ function enemiesOf(b){
   return out;
 }
 function canSee(b, t){
+  if (smokeBlocks(b.pos.x, b.pos.y + EYE, b.pos.z, t.x, t.y, t.z)) return false; // rökgranater skymmer
   _o.set(b.pos.x, b.pos.y + EYE, b.pos.z); _d.set(t.x - _o.x, t.y - _o.y, t.z - _o.z); const L = _d.length(); if (L < .1) return true; _d.multiplyScalar(1/L);
   _o.addScaledVector(_d, .5); const h = ray(_o, _d, L, b.col); if (!h) return true;
   if (t.kind === 'pl') return !!(h.owner && h.owner.player);
@@ -197,6 +204,8 @@ function goalFor(b){
 }
 function think(b, dt){
   const D = DIFF[BOTS.diff] || DIFF.normal;
+  // bländgranat: ser ingenting en stund
+  if (b.blindT > 0){ b.blindT -= dt; b.tgt = null; b.moving = false; return; }
   // ingenjören fyller på en laddning var tolfte sekund (som ammunitionslådan i BF4)
   if (b.K.charges && b.charges < b.K.charges){ b.resup = (b.resup ?? 12) - dt; if (b.resup <= 0){ b.charges++; b.resup = 12; } }
   b.scanT -= dt;

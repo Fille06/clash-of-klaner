@@ -8,6 +8,7 @@ import { sfx } from './audio.js';
 import { PL, TARGETS, explode, NETHOOK } from './player.js';
 import { DS } from './destruct.js';
 import { T, hAt } from './terrain.js';
+import { smokeBlocks } from './smoke.js';
 
 export const DEF = { list: [], on: false, spots: [], tracers: [], shells: [], alarm: 0 };
 export const SECTORS = [90, 120, 180, 360], PRIOS = { nar: 'NÄRMAST', svag: 'SVAGAST', forst: 'FÖRST SEDD' }, MODES = { fri: 'FRI ELD', svar: 'BESVARA ELD', hall: 'HÅLL ELD' };
@@ -243,11 +244,13 @@ export function updateDefense(dt){
       if (d.kind === 'snubbel' && d.alive){ d.cool = Math.max(0, d.cool - dt);
         if (!d.cool && Math.abs(p.x - d.pos.x) < d.w/2 + .2 && Math.abs(p.z - d.pos.z) < d.d/2 + .3 && p.y - .9 < d.pos.y + .5){ d.cool = 4; alarm(d.pos); } }
     } }
+  mountHint();
   const TG = targets();
   for (const d of DEF.list){
     if (d.kind !== 'gun') continue;
     if (d.falling){ const F = d.falling; F.v += 9.8*dt; d.M.root.position.y = Math.max(F.y0, d.M.root.position.y - F.v*dt); d.M.root.rotation.x += dt*1.5; if (d.M.root.position.y <= F.y0){ d.falling = null; fx.dust(d.pos.x, F.y0, d.pos.z, 1.5, 6); } continue; }
     if (!d.alive) continue;
+    if (d.manned){ if (d.b && ((d.chk = (d.chk || 0) - dt) <= 0)){ d.chk = .3; const B = d.b, roofOk = !d.g.top || B.cells.some(c => c.alive && c.j === B.NY - 1 && Math.abs(c.i + .5 - B.NX/2) < 2.5 && Math.abs(c.k + .5 - B.NZ/2) < 2.5); if (!roofOk || DS.falls.some(f => f.b === B) || B.collapsed > 0) gunDie(d, true); } continue; } // spelaren styr vapnet
     // tornets tak borta eller tornet rasar → kulsprutan faller
     // vapnets egen byggnad (näste, torn) rasar – t.ex. när byggnaden den står på ovanpå sprängs – då faller vapnet
     if (d.b && ((d.chk = (d.chk || 0) - dt) <= 0)){ d.chk = .3; const B = d.b, roofOk = !d.g.top || B.cells.some(c => c.alive && c.j === B.NY - 1 && Math.abs(c.i + .5 - B.NX/2) < 2.5 && Math.abs(c.k + .5 - B.NZ/2) < 2.5); if (!roofOk || DS.falls.some(f => f.b === B) || B.collapsed > 0){ gunDie(d, true); continue; } }
@@ -261,7 +264,7 @@ export function updateDefense(dt){
         _v.copy(d.pos).setY(d.pos.y + .05); _d.set(t.x - _v.x, t.y + .3 - _v.y, t.z - _v.z); const L = _d.length(); _d.multiplyScalar(1/L);
         // granatkastaren skjuter i båge och behöver ingen fri sikt (men måste veta var målet är: larm, strålkastare eller att målet skjutit)
         if (d.g.indirect){ if (!(DEF.alarm > 0 || d.shotAt > 0 || litBy(d) || dist < 40)) continue; }
-        else { _v.addScaledVector(_d, .7); const h = ray(_v, _d, L, d.col); if (!h || !((t.pl && h.owner && h.owner.player === true) || (!t.pl && t.col && h.col.handle === t.col.handle))) continue; }
+        else { if (smokeBlocks(d.pos.x, d.pos.y, d.pos.z, t.x, t.y, t.z)) continue; _v.addScaledVector(_d, .7); const h = ray(_v, _d, L, d.col); if (!h || !((t.pl && h.owner && h.owner.player === true) || (!t.pl && t.col && h.col.handle === t.col.handle))) continue; }
         if (!d.firstSeen.has(t.id)) d.firstSeen.set(t.id, performance.now());
         const s = it.pri === 'svag' ? t.hp*10 + dist : it.pri === 'forst' ? d.firstSeen.get(t.id) : dist; if (s < bs){ bs = s; best = t; } }
       if (best && (!d.tgt || d.tgt.id !== best.id)) d.seen = 0; d.tgt = best; }
@@ -301,7 +304,85 @@ function shoot(d, t){
   if (!h) return; const p = h.point, n = h.normal;
   if (h.owner && h.owner.player){ PL.hp -= d.g.dmg; PL.dmgT = .8; PL.hurtFrom = { x: d.pos.x, z: d.pos.z, t: 1.2 }; PL.lastHit = { by: d.g.name, x: d.pos.x, z: d.pos.z }; PL.shake = Math.max(PL.shake || 0, .15); return; }
   if (t.onHit && t.col && h.col.handle === t.col.handle){ t.onHit(d.g.dmg, d); return; }
-  if (h.owner && h.owner.b){ const c = h.owner; c.b.hit(c, d.g.dmg*1.2, o); if (c.t === 'glass') return; fx.chips(p.x, p.y, p.z, n.x, n.y, n.z, 3, null); if (c.alive) fx.decal('hole', p, n, .08 + Math.random()*.04); }
+  if (h.owner && h.owner.b){ const c = h.owner; if (NETHOOK.host !== false){ c.b.hit(c, d.g.dmg*1.2, o); if (NETHOOK.host && NETHOOK.cell) NETHOOK.cell(c, d.g.dmg*1.2); } if (c.t === 'glass') return; fx.chips(p.x, p.y, p.z, n.x, n.y, n.z, 3, null); if (c.alive) fx.decal('hole', p, n, .08 + Math.random()*.04); }
   else { fx.dust(p.x, p.y, p.z, .3, 1); fx.chips(p.x, p.y, p.z, n.x, n.y, n.z, 2, '#5a5040'); }
 }
 export function defReset(){ for (const t of DEF.tracers) E.scene.remove(t.m); DEF.tracers.length = 0; for (const sh of DEF.shells) if (sh.m) E.scene.remove(sh.m); DEF.shells.length = 0; DEF.alarm = 0; DEF.list.length = 0; DEF.spots.length = 0; DEF.on = false; }
+
+// ── BEMANNA STATIONÄRA VAPEN ──────────────────────────────────────────────
+// Spelaren kan ta över ett eget vapen (eget lag eller egen bas i övning): gå fram och tryck [E].
+// Musen vrider vapnet (inom dess sektor), vänster knapp skjuter, höger zoomar, [E] lämnar.
+// Kulsprutor blir överhettade vid lång eld; granatkastaren skjuter dit siktet pekar på marken (15–110 m).
+const MOUNT_R = 2.6;
+const ownGun = d => d.kind === 'gun' && d.alive && !d.falling && !d.manned && (!d.it.side || d.it.side === 'us');
+export function nearGun(){
+  if (!PL.on || !PL.body || !DEF.on || PL.hp <= 0) return null; const t = PL.body.translation(); let best = null, bd = MOUNT_R;
+  for (const d of DEF.list){ if (!ownGun(d)) continue; const dd = Math.hypot(d.pos.x - t.x, d.pos.z - t.z), base = d.pos.y - d.g.h; if (dd < bd && Math.abs(base - (t.y - .9)) < 2.2){ best = d; bd = dd; } }
+  return best;
+}
+function mountHint(){
+  if (PL.gun){ const d = PL.gun; PL.msg = `${d.g.name} · [E] LÄMNA${d.over > 0 ? ' · ÖVERHETTAD' : d.g.indirect ? ' · SIKTA PÅ MARKEN' : ''}`; PL.msgT = .3; return; }
+  const g = nearGun(); if (g && (!PL.msg || PL.msg.startsWith('[E]'))){ PL.msg = `[E] BEMANNA ${g.g.name}`; PL.msgT = .3; }
+}
+function mountEnter(d){
+  PL.gun = d; d.manned = true; d.heat = 0; d.over = 0; d.mcool = .3; d.tgt = null;
+  const y = d.M.yaw.rotation.y, f = { x: Math.sin(y), z: Math.cos(y) }, base = d.pos.y - d.g.h;
+  // spelaren står bakom vapnet
+  const p = { x: d.pos.x - f.x*1.0, y: base + 1.0, z: d.pos.z - f.z*1.0 }; PL.body.setTranslation(p, true); PL.body.setNextKinematicTranslation(p); PL.vy = 0;
+  PL.yaw = y + Math.PI; PL.pitch = 0; if (PL.vm) PL.vm.visible = false; d.fan && (d.fan.visible = false); sfx.click();
+}
+export function mountExit(){
+  const d = PL.gun; if (!d) return; PL.gun = null; d.manned = false; d.M.fl.visible = false; d.M.L.intensity = 0; d.seen = 0; d.tgt = null;
+  if (PL.vm && PL.hp > 0) PL.vm.visible = true; E.cam.fov = 70; E.cam.updateProjectionMatrix();
+}
+const _mc = new THREE.Vector3(), _mf = new THREE.Vector3();
+function mountUpdate(dt){
+  const d = PL.gun; if (!d.alive || d.falling || !DEF.on){ mountExit(); return; }
+  const it = d.it, dir0 = (it.dir || 0)*Math.PI/180, half = (it.sec || 360)*Math.PI/360;
+  // vapnets riktning = kamerans (kameran tittar mot −Z, vapnet mot +Z) – inom vapnets sektor
+  let gy = PL.yaw + Math.PI; if (half < Math.PI - .01){ const o = Math.max(-half, Math.min(half, wrap(gy - dir0))); gy = dir0 + o; PL.yaw = gy - Math.PI; }
+  PL.pitch = Math.max(d.g.indirect ? -.6 : -.45, Math.min(.7, PL.pitch));
+  d.M.yaw.rotation.y = gy; d.M.pitch.rotation.x = d.g.indirect ? -.8 : -PL.pitch;
+  const f = _mf.set(Math.sin(gy), 0, Math.cos(gy));
+  E.cam.position.set(d.pos.x - f.x*.8, d.pos.y + .42, d.pos.z - f.z*.8); E.cam.rotation.set(PL.pitch, PL.yaw, 0, 'YXZ');
+  const fovT = PL.aim ? (d.g.range > 100 ? 28 : 45) : 66; E.cam.fov += (fovT - E.cam.fov)*Math.min(1, dt*12); E.cam.updateProjectionMatrix();
+  // eld
+  d.mcool -= dt; d.heat = Math.max(0, (d.heat || 0) - dt*.25); if (d.over > 0){ d.over -= dt; if (d.over <= 0) d.heat = .4; }
+  if (PL.trig && d.mcool <= 0 && !(d.over > 0)){
+    const slow = d.g.rocket || d.g.indirect || d.g.rpm < 60; d.mcool = slow ? Math.max(d.g.pause, 60/d.g.rpm) : 60/d.g.rpm;
+    if (!slow){ d.heat += .02; if (d.heat >= 1){ d.over = 3; sfx.click(); } }
+    E.cam.getWorldDirection(_mc); mannedShot(d, _mc.clone());
+    PL.pitch += slow ? .03 : .004; PL.yaw += (Math.random() - .5)*.004; PL.shake = Math.max(PL.shake || 0, slow ? .3 : .06);
+  }
+  if (!PL.trig && d.mcool < -.05){ d.M.fl.visible = false; d.M.L.intensity = 0; }
+}
+function mannedShot(d, aim){
+  const o = d.pos.clone().setY(d.pos.y + .05), sp = d.g.spread*.6;
+  d.M.fl.visible = true; d.M.fl.rotation.z = Math.random()*6; d.M.L.intensity = 25; setTimeout(() => { if (!PL.trig || d.g.rocket || d.g.indirect){ d.M.fl.visible = false; d.M.L.intensity = 0; } }, 40);
+  if (d.g.indirect){
+    // granatkastare: landar där siktet träffar marken (15–110 m), med lite spridning
+    const cam = E.cam.position, h0 = ray(cam, aim, 140, PL.col); let to;
+    if (h0) to = new THREE.Vector3(h0.point.x, h0.point.y, h0.point.z); else to = cam.clone().addScaledVector(_mf, 110);
+    const dx = to.x - o.x, dz = to.z - o.z, L = Math.hypot(dx, dz) || 1, D = Math.max(d.g.minRange || 15, Math.min(d.g.range, L));
+    to.set(o.x + dx/L*D + (Math.random() - .5)*3, 0, o.z + dz/L*D + (Math.random() - .5)*3); to.y = Math.max(hAt(to.x, to.z), T.sea) + .2;
+    const m = new THREE.Mesh(new THREE.SphereGeometry(.07, 6, 4), gunMats().dark); m.position.copy(o); E.scene.add(m);
+    const T0 = 1.5 + D/70; DEF.shells.push({ m, from: o.clone(), to, t: T0, T: T0, arc: 8 + D*.15, r: d.g.splash, dmg: 380, w: 'mortarM', k: .8, by: 'DIN ' + d.g.name, side: 'pl' });
+    sfx.boom && sfx.boom(.2, 1); return;
+  }
+  const dir = aim.clone(); dir.x += (Math.random() - .5)*sp*2; dir.y += (Math.random() - .5)*sp*2; dir.z += (Math.random() - .5)*sp*2; dir.normalize();
+  const start = o.clone().addScaledVector(dir, 1.25), h = ray(start, dir, d.g.range + 10, PL.col);
+  sfx.mg && sfx.mg(1); d.shots = (d.shots || 0) + 1; if (d.shots % 3 === 0 && !d.g.flame) tracer(start, dir, h ? h.toi : 80);
+  if (d.g.rocket){
+    const to = h ? new THREE.Vector3(h.point.x, h.point.y, h.point.z) : start.clone().addScaledVector(dir, d.g.range), m = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, .5, 6).rotateX(Math.PI/2), ROCKM || (ROCKM = new THREE.MeshBasicMaterial({ color: 0xffb070 })));
+    m.position.copy(start); m.lookAt(to); E.scene.add(m); const T0 = Math.max(.15, to.distanceTo(start)/120);
+    DEF.shells.push({ m, from: start.clone(), to, t: T0, T: T0, r: d.g.splash, dmg: 650, w: 'atgmM', k: 1, n: h ? new THREE.Vector3(h.normal.x, h.normal.y, h.normal.z) : null, breach: !!(h && h.owner && h.owner.b), by: 'DIN ' + d.g.name, side: 'pl' });
+    return;
+  }
+  if (d.g.splash && h){ const hp = new THREE.Vector3(h.point.x, h.point.y, h.point.z), dist = h.toi; setTimeout(() => { if (DEF.on){ PL.nextCause = 'DIN ' + d.g.name; PL.nextW = 'akanM'; explode(hp, d.g.splash, 120, .3, null, false, true, 'pl'); } }, Math.min(400, dist*4)); }
+  if (!h) return; const p = h.point, n = h.normal;
+  if (h.owner && h.owner.b){ const c = h.owner, dmg = d.g.dmg*1.2; c.b.hit(c, dmg, o); if (NETHOOK.cell) NETHOOK.cell(c, dmg); if (c.t === 'glass') return; fx.chips(p.x, p.y, p.z, n.x, n.y, n.z, 3, null); if (c.alive) fx.decal('hole', p, n, .08 + Math.random()*.04); return; }
+  if (h.owner && h.owner.target && h.owner.target !== d.target){ h.owner.target.hit(d.g.dmg, p, 'pl'); PL.hits = .25; return; }
+  fx.dust(p.x, p.y, p.z, .3, 1); fx.chips(p.x, p.y, p.z, n.x, n.y, n.z, 2, '#5a5040');
+}
+PL.onUse = () => { if (PL.gun) return mountExit(); const d = nearGun(); if (d) mountEnter(d); };
+PL.mountUpdate = mountUpdate; PL.mountExit = mountExit;

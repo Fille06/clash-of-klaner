@@ -139,3 +139,15 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0f12; fon
 #menu .rteam { border: 1px solid var(--ln); padding: 8px 10px; background: rgba(6,12,16,.7); font-size: 13px; letter-spacing: .08em; }
 #menu .rteam b { display: block; margin-bottom: 4px; } #menu .rteam.A b { color: #6fb6ff; } #menu .rteam.B b { color: #ff8a70; }
 #menu .rteam small { opacity: .7; } #menu .rteam .ai { opacity: .55; font-size: 12px; margin-top: 4px; }
+/* klasser (BF4): klassval på dödsskärmen, kikarsikte, bländning, spottade fiender */
+#death .dc { margin-top: 14px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+#death .dc span { border: 1px solid rgba(255,255,255,.25); padding: 6px 10px; font-size: 13px; letter-spacing: .12em; background: rgba(0,0,0,.35); }
+#death .dc span.on { border-color: var(--or); color: var(--or); }
+#death .dc i { font-style: normal; display: inline-block; min-width: 16px; margin-right: 6px; background: rgba(255,255,255,.15); text-align: center; }
+#death .dc small { display: block; font-size: 10px; opacity: .65; }
+#scope { display: none; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle at 50% 50%, transparent 0 32vh, #000 32.2vh); }
+#scope::before { content: ''; position: absolute; left: 50%; top: 18vh; bottom: 18vh; width: 1px; background: rgba(0,0,0,.85); }
+#scope::after { content: ''; position: absolute; top: 50%; left: calc(50% - 32vh); width: 64vh; height: 1px; background: rgba(0,0,0,.85); }
+#flashov { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+#spots i { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; background: #ff3a2a; transform: rotate(45deg); box-shadow: 0 0 6px rgba(255,60,40,.8); }
+#clsn { position: absolute; right: 24px; bottom: 132px; font-size: 12px; letter-spacing: .2em; opacity: .7; }

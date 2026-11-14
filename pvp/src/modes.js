@@ -2,7 +2,8 @@
 // startar AI-soldaterna (bots.js), räknar biljetter (liv) och avgör vinnaren.
 import * as THREE from 'three';
 import { E } from './engine.js';
-import { PL, initPlayer } from './player.js';
+import { PL, initPlayer, CLASSES, CLASS_KEYS, NADES } from './player.js';
+import { classesReset } from './classes.js';
 import { initHud, hudFeed, hudPoints } from './hud.js';
 import { W, resetWorld } from './world.js';
 import { BD, buildPlot, rebuild, normBase, loadSlots, decodeBase } from './builder.js';
@@ -30,6 +31,8 @@ export function setupHtml(mode){
     <label id="mEnemyL">FIENDENS BAS <select id="mEnemy"><option value="ai">AI-BAS</option><option value="code">BASKOD FRÅN EN VÄN</option></select></label>
     <label id="mCodeL" style="display:none">BASKOD <input id="mCode" placeholder="klistra in baskoden"></label>
     <label>LAGSTORLEK <select id="mSize">${SIZES.map(n => `<option value="${n}" ${n === 5 ? 'selected' : ''}>${n} MOT ${n}</option>`).join('')}</select></label>
+    <label>KLASS <select id="mCls">${CLASS_KEYS.map(k => `<option value="${k}" ${PL.nextCls === k ? 'selected' : ''}>${CLASSES[k].name} – ${CLASSES[k].sub}</option>`).join('')}</select></label>
+    <label>GRANAT <select id="mNade">${Object.keys(NADES).map(k => `<option value="${k}" ${PL.nade === k ? 'selected' : ''}>${NADES[k].name}</option>`).join('')}</select></label>
     <label>SVÅRIGHET <select id="mDiff"><option value="latt">LÄTT</option><option value="normal" selected>NORMAL</option><option value="svar">SVÅR</option></select></label>
     <div class="row"><div class="it" id="mGo">STARTA<small>Du och dina AI-kamrater mot AI-fienden</small></div><div class="it" id="mBack">‹ TILLBAKA<small></small></div></div>
     <div class="note" id="mNote"></div>
@@ -45,6 +48,7 @@ export function bindSetup(mode, back){
   for (const id of ['mRole', 'mEnemy']) if ($(id)) $(id).onchange = upd; upd();
   $('mBack').onclick = back;
   $('mGo').onclick = async () => {
+    PL.nextCls = $('mCls').value; PL.nade = $('mNade').value; try { localStorage.setItem('ck/klass', PL.nextCls); localStorage.setItem('ck/granat', PL.nade); } catch (e){}
     const cfg = { mode, role: $('mRole') ? $('mRole').value : 'both', size: +$('mSize').value, diff: $('mDiff').value, own: null, enemy: null };
     const ov = $('mOwn').value; cfg.own = ov.startsWith('slot') ? loadSlots()[+ov.slice(4)] : aiBase3d(Date.now() % 100000, 'normal');
     if ($('mEnemy').value === 'code'){ try { cfg.enemy = await decodeBase($('mCode').value); } catch (e){ $('mNote').textContent = 'Ogiltig baskod'; return; } if (!cfg.enemy.items.some(i => i.t === 'hq')){ $('mNote').textContent = 'Baskoden saknar högkvarter'; return; } }
@@ -71,6 +75,7 @@ export async function startOnline(m){
 }
 
 export function startMatch(cfg){
+  classesReset();
   const bmb = cfg.mode === 'bmb', defend = cfg.mode === 'fma' && cfg.role === 'defend', attack = cfg.mode === 'fma' && cfg.role === 'attack';
   const net = cfg.net || null, flip = bmb && cfg.ownPlot === 1; // online i lag B: vår bas ligger på tomt 2
   defStop(); partsStop(); botsClear(); resetWorld(); T.grid = false;
@@ -95,7 +100,7 @@ export function startMatch(cfg){
   // försvarens räckvidd i lägena: startplatserna ska ligga utom räckhåll (egen bas kan ha prickskytt i framkanten)
   DEF.maxRange = bmb ? 85 : 110;
   // försvaren gör något mindre skada mot AI-soldater i bas mot bas, så att ett anfall kan bryta igenom och högkvarteret avgör
-  BOTS.defDmg = bmb ? .6 : .55;
+  BOTS.defDmg = bmb ? .6 : .62;
   // försvar mot anfall: anfallare som möter försvarare på nära håll stannar och tar striden (i bas mot bas pressar de på)
   BOTS.holdFight = !bmb;
   // online: en spelare som lämnar ersätts av en AI-soldat (värden)
@@ -138,7 +143,7 @@ export function startMatch(cfg){
   lockPointer(document.getElementById('c'));
 }
 
-export function stopMatch(){ MATCH.on = false; MATCH.id = (MATCH.id || 0) + 1; DEF.maxRange = null; botsClear(); DEF.extra = null; if (NET.on) netStop(); }
+export function stopMatch(){ classesReset(); MATCH.on = false; MATCH.id = (MATCH.id || 0) + 1; DEF.maxRange = null; botsClear(); DEF.extra = null; if (NET.on) netStop(); }
 
 export function updateMatch(dt){
   if (!MATCH.on || MATCH.over) return;
