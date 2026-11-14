@@ -95,7 +95,9 @@ export function startMatch(cfg){
   // försvarens räckvidd i lägena: startplatserna ska ligga utom räckhåll (egen bas kan ha prickskytt i framkanten)
   DEF.maxRange = bmb ? 85 : 110;
   // försvaren gör något mindre skada mot AI-soldater i bas mot bas, så att ett anfall kan bryta igenom och högkvarteret avgör
-  BOTS.defDmg = bmb ? .6 : 1;
+  BOTS.defDmg = bmb ? .6 : .55;
+  // försvar mot anfall: anfallare som möter försvarare på nära håll stannar och tar striden (i bas mot bas pressar de på)
+  BOTS.holdFight = !bmb;
   // online: en spelare som lämnar ersätts av en AI-soldat (värden)
   if (net && net.host) NET.ui.replace = team => botAdd(team, bmb ? 'attack' : team === (defend ? 'us' : 'them') ? 'defend' : 'attack', 'gevar');
   partsStart([...ours, ...theirs].map(i => Object.assign(i, { explosive: !!(BD.CAT[i.t] && BD.CAT[i.t].explosive) })));

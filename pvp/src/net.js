@@ -9,6 +9,8 @@ import { E } from './engine.js';
 import { R, PH, own } from './physics.js';
 import { PL, NETHOOK, explode } from './player.js';
 import { DS } from './destruct.js';
+import { DEF, GUNS } from './defense.js';
+import { ray } from './physics.js';
 import { BOTS, botProxySync, soldierModel, disposeModel } from './bots.js';
 import { hudFeed } from './hud.js';
 
@@ -19,12 +21,13 @@ export const localTeam = abs => (abs === NET.team ? 'us' : 'them');
 
 export function netConnect(url, name){
   return new Promise((resolve, reject) => {
+    if (NET.ws){ const old = NET.ws; NET.ws = null; old.onclose = old.onmessage = old.onerror = null; try { old.close(); } catch (e){} }
     let ws; try { ws = new WebSocket(url); } catch (e){ reject(new Error('Ogiltig serveradress')); return; }
     NET.ws = ws; let done = false;
     ws.onopen = () => ws.send(JSON.stringify(Object.assign({ t: 'hello', v: 1, name: String(name || 'Soldat').slice(0, 24) }, NET.token ? { token: NET.token } : {})));
     ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (x){ return; } if (m.t === 'welcome'){ NET.me = m.playerId; NET.token = m.token; if (!done){ done = true; resolve(m); } } handle(m); };
     ws.onerror = () => { if (!done){ done = true; reject(new Error('Kunde inte ansluta till servern')); } };
-    ws.onclose = () => { NET.ws = null; if (NET.on) netStop('Anslutningen bröts'); NET.ui.onClosed && NET.ui.onClosed('Frånkopplad från servern'); };
+    ws.onclose = () => { if (NET.ws !== ws) return; NET.ws = null; if (NET.on) netStop('Anslutningen bröts'); NET.ui.onClosed && NET.ui.onClosed('Frånkopplad från servern'); };
   });
 }
 export function netSend(m){ if (NET.ws && NET.ws.readyState === 1) NET.ws.send(JSON.stringify(m)); }
@@ -39,11 +42,11 @@ function handle(m){
   const d = m.d || {}, from = m.from;
   switch (m.k){
     case 'st': peerUpdate(from, d); break;
-    case 'boom': if (Array.isArray(d.p) && d.p.length === 3 && d.p.every(Number.isFinite) && Number.isFinite(d.r) && Number.isFinite(d.dmg)){ const n = Array.isArray(d.n) && d.n.length === 3 && d.n.every(Number.isFinite) ? new THREE.Vector3(...d.n) : null; NET.applying = true; NETHOOK.applying = true; try { explode(new THREE.Vector3(...d.p), Math.max(0, Math.min(d.r, 8)), Math.max(0, Math.min(d.dmg, 3000)), Math.max(0, Math.min(d.k || 1, 2)), n, !!d.br, false, d.team === 'A' || d.team === 'B' ? localTeam(d.team) : null, Number.isInteger(d.seed) ? d.seed : null); } finally { NET.applying = false; NETHOOK.applying = false; } } break;
-    case 'cell': { const B = DS.list[d.b], c = B && B.cells[d.c]; if (c && Number.isFinite(d.dmg)) B.hit(c, Math.max(0, Math.min(d.dmg, 200)), null); break; }
+    case 'boom': if (Array.isArray(d.p) && d.p.length === 3 && d.p.every(Number.isFinite) && Number.isFinite(d.r) && Number.isFinite(d.dmg) && hostAccepts(from, d)){ const n = Array.isArray(d.n) && d.n.length === 3 && d.n.every(Number.isFinite) ? new THREE.Vector3(...d.n) : null; NET.applying = true; NETHOOK.applying = true; try { explode(new THREE.Vector3(...d.p), Math.max(0, Math.min(d.r, 8)), Math.max(0, Math.min(d.dmg, 3000)), Math.max(0, Math.min(d.k || 1, 2)), n, !!d.br, false, d.team === 'A' || d.team === 'B' ? localTeam(d.team) : null, Number.isInteger(d.seed) ? d.seed : null); } finally { NET.applying = false; NETHOOK.applying = false; } } break;
+    case 'cell': { const B = DS.list[d.b], c = B && B.cells[d.c]; if (c && Number.isFinite(d.dmg) && cellAccepts(from, B, c)) B.hit(c, Math.max(0, Math.min(d.dmg, fromHost(from) ? 200 : CELL_MAX)), null); break; }
     case 'hit': if (Number.isFinite(d.dmg)){ const dmg = Math.max(0, Math.min(d.dmg, 150));
       // värden: bara träffar på motståndarlagets AI-soldater räknas
-      if (d.bot && NET.host){ const b = BOTS.list.find(x => x.id === d.bot), info = (NET.start.players || []).find(x => x.id === from); if (b && b.alive && b.target && info && b.team !== localTeam(info.team)) b.target.hit(dmg, null, 'net'); }
+      if (d.bot && NET.host){ const b = BOTS.list.find(x => x.id === d.bot), info = (NET.start.players || []).find(x => x.id === from), p = NET.peers.get(from); if (b && b.alive && b.target && info && p && b.team !== localTeam(info.team) && Math.hypot(b.pos.x - p.to.x, b.pos.z - p.to.z) < 220) b.target.hit(dmg, null, 'net'); }
       else if (d.to === NET.me && PL.hp > 0){ PL.hp -= dmg; PL.dmgT = .8; const p = NET.peers.get(from); PL.lastHit = { by: p ? p.name : (d.by || 'FIENDE'), x: p ? p.pos.x : 0, z: p ? p.pos.z : 0 }; if (p) PL.hurtFrom = { x: p.pos.x, z: p.pos.z, t: 1.2 }; } }
       break;
     case 'dead': if (NET.host && (d.team === 'A' || d.team === 'B')){ const lt = localTeam(d.team); BOTS.tickets[lt] = Math.max(0, BOTS.tickets[lt] - 1); } { const p = NET.peers.get(from); if (p) p.dead = true; } break;
@@ -54,6 +57,49 @@ function handle(m){
   }
 }
 
+// värden avgör matchen och kontrollerar därför sprängningar från de andra mot sin egen värld:
+// RPG måste ha fri sikt från skytten, minor/claymore måste finnas där, försvarens skott måste komma från ett försvar som når dit
+const _o = new THREE.Vector3(), _dd = new THREE.Vector3();
+const ok3 = v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite);
+const fromHost = id => NET.start && id === NET.start.host;
+// fri sikt från o till punkten P (träff på det man siktade på eller strax före räknas som fri)
+function clearLine(o, P, col, slack){ _dd.copy(P).sub(o); const L = _dd.length(); if (L < 2) return true; _dd.multiplyScalar(1/L); const h = ray(o, _dd, L, col); return !h || h.toi > L - slack; }
+// skott på byggnadsceller från andra spelare: takt som ett automatvapen, vapnets skada, inom räckvidd och med fri sikt
+export const CELL_MAX = 40, CELL_RATE = 14;
+const _cw = new THREE.Vector3();
+function cellAccepts(from, B, c){
+  if (from === NET.me || fromHost(from)) return true; // värdens skott kommer från AI-soldaterna
+  const p = NET.peers.get(from); if (!p || p.dead) return false;
+  const now = performance.now(), w = p.cw || (p.cw = { t: now, n: 0 }); if (now - w.t > 1000){ w.t = now; w.n = 0; } if (++w.n > CELL_RATE) return false;
+  B.pos(c, _cw); _o.set(p.to.x, p.to.y + 1.04, p.to.z); if (_o.distanceTo(_cw) > 400) return false;
+  return clearLine(_o, _cw, p.col, B.s.c*1.6);
+}
+// värden avgör matchen och kontrollerar därför sprängningar från de andra mot sin egen värld:
+// RPG måste ha fri sikt från där den avfyrades, minor/claymore måste finnas (eller nyss ha sprängts) där,
+// försvarens skott måste träffa nära avsändaren (det var den som försvaret sköt på) från motståndarlagets försvar i dess egen takt
+const DEF_GAP = { granat: 3.0, pv: 4.0, akan: .3 };
+function hostAccepts(from, d){
+  if (!NET.host || from === NET.me) return true;
+  const p = NET.peers.get(from), P = new THREE.Vector3(d.p[0], d.p[1], d.p[2]), info = (NET.start.players || []).find(x => x.id === from);
+  if (d.w === 'ammo' || d.w === 'bot') return false;
+  if (d.w === 'rpg'){
+    if (!p) return false;
+    if (ok3(d.o) && Math.hypot(d.o[0] - p.to.x, d.o[2] - p.to.z) < 30) _o.set(d.o[0], d.o[1], d.o[2]); else _o.set(p.to.x, p.to.y + 1.04, p.to.z);
+    return clearLine(_o, P, p.col, 3);
+  }
+  if (d.w === 'mine' || d.w === 'clay'){
+    if (!p || Math.hypot(p.to.x - P.x, p.to.z - P.z) > 20) return false;
+    const kind = d.w === 'mine' ? 'mine' : 'claymore', now = performance.now();
+    return DEF.list.some(x => x.kind === kind && x.alive && Math.hypot(x.pos.x - P.x, x.pos.z - P.z) < 4) || (DEF.gone || []).some(g => g.kind === kind && now - g.t < 2500 && Math.hypot(g.x - P.x, g.z - P.z) < 4);
+  }
+  if (d.w === 'mortar' || d.w === 'atgm' || d.w === 'akan'){
+    if (!p || !info || Math.hypot(p.to.x - P.x, p.to.z - P.z) > 20) return false;
+    const t = d.w === 'mortar' ? 'granat' : d.w === 'atgm' ? 'pv' : 'akan', side = localTeam(info.team), now = performance.now();
+    const g = DEF.list.find(x => x.kind === 'gun' && x.alive && x.it && x.it.t === t && x.it.side !== side && Math.hypot(x.pos.x - P.x, x.pos.z - P.z) < GUNS[t].range + 15 && now - (x.netT || 0) > DEF_GAP[t]*1000);
+    if (!g) return false; g.netT = now; return true;
+  }
+  return true; // C4, sprängladdning och granat kontrolleras av servern (laddning satt / räckvidd / ammunition)
+}
 // ── andra spelare ─────────────────────────────────────────────────────────
 function peerUpdate(id, d){
   if (![d.x, d.y, d.z, d.yaw].every(Number.isFinite)) return;
@@ -80,13 +126,14 @@ export function netBegin(){
   NET.on = true; NET.peers.clear(); BOTS.peers = [];
   // krokar: mina sprängningar och skott på byggnader skickas till de andra
   // laget skickas med (A/B) så att mottagarna inte skadar avsändarlagets egna soldater
-  NETHOOK.boom = (p, r, dmg, k, n, br, seed, team) => { if (!NET.applying) ev('boom', { p: [p.x, p.y, p.z].map(v => Math.round(v*100)/100), r, dmg, k, n: n ? [n.x, n.y, n.z] : null, br: !!br, seed, team: team === 'us' || team === 'pl' ? NET.team : team === 'them' ? other(NET.team) : null }); };
+  NETHOOK.plant = (kind, p) => ev('plant', { w: kind, p: [p.x, p.y, p.z].map(v => Math.round(v*100)/100) });
+  NETHOOK.boom = (p, r, dmg, k, n, br, seed, team, w, o) => { if (!NET.applying) ev('boom', { w, o: o ? [o.x, o.y, o.z].map(v => Math.round(v*100)/100) : undefined, p: [p.x, p.y, p.z].map(v => Math.round(v*100)/100), r, dmg, k, n: n ? [n.x, n.y, n.z] : null, br: !!br, seed, team: team === 'us' || team === 'pl' ? NET.team : team === 'them' ? other(NET.team) : null }); };
   NETHOOK.host = !!NET.host;
   NETHOOK.cell = (c, dmg) => { const bi = DS.list.indexOf(c.b), ci = c.b.cells.indexOf(c); if (bi >= 0 && ci >= 0) ev('cell', { b: bi, c: ci, dmg: Math.round(dmg) }); };
   BOTS.onProxyHit = (id, dmg) => ev('hit', { to: 'host', bot: id, dmg: Math.round(dmg) });
 }
 export function netStop(reason){
-  NET.on = false; NETHOOK.boom = NETHOOK.cell = null; NETHOOK.host = null; BOTS.onProxyHit = null;
+  NET.on = false; NETHOOK.boom = NETHOOK.cell = NETHOOK.plant = null; NETHOOK.host = null; BOTS.onProxyHit = null;
   for (const id of [...NET.peers.keys()]) peerRemove(id);
   if (reason && NET.ui.onStopped) NET.ui.onStopped(reason);
 }

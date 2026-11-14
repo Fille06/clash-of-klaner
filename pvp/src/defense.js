@@ -184,10 +184,11 @@ function gunDie(d, fall){
   DEF.onKill && DEF.onKill(d);
 }
 // en sprängning som kommer från nätet tar bort minan tyst (den som orsakade den har redan skickat sin egen sprängning)
-function quietRemove(d){ d.alive = false; d.target.alive = false; E.scene.remove(d.m); }
-function mineBoom(d){ if (!d.alive) return; if (NETHOOK.applying) return quietRemove(d); d.alive = false; d.target.alive = false; E.scene.remove(d.m); PL.nextCause = 'MINA'; explode(d.pos.clone().setY(d.pos.y + .1), 2.4, 700, 1, null, false, true, d.it && d.it.side); DEF.onKill && DEF.onKill(d); }
+export function defGone(d){ const L = DEF.gone || (DEF.gone = []); L.push({ kind: d.kind, x: d.pos.x, z: d.pos.z, t: performance.now() }); if (L.length > 40) L.shift(); }
+function quietRemove(d){ d.alive = false; d.target.alive = false; E.scene.remove(d.m); defGone(d); }
+function mineBoom(d){ if (!d.alive) return; if (NETHOOK.applying) return quietRemove(d); defGone(d); d.alive = false; d.target.alive = false; E.scene.remove(d.m); PL.nextCause = 'MINA'; PL.nextW = 'mine'; explode(d.pos.clone().setY(d.pos.y + .1), 2.4, 700, 1, null, false, true, d.it && d.it.side); DEF.onKill && DEF.onKill(d); }
 function clayBoom(d){
-  if (!d.alive) return; if (NETHOOK.applying) return quietRemove(d); d.alive = false; d.target.alive = false; E.scene.remove(d.m); PL.nextCause = 'CLAYMORE';
+  if (!d.alive) return; if (NETHOOK.applying) return quietRemove(d); defGone(d); d.alive = false; d.target.alive = false; E.scene.remove(d.m); PL.nextCause = 'CLAYMORE'; PL.nextW = 'clay';
   const f = new THREE.Vector3(Math.sin(d.dir), 0, Math.cos(d.dir)), p = d.pos.clone().setY(d.pos.y + .3);
   explode(p.clone().addScaledVector(f, 1.2), 1.6, 400, .6, null, false, true, d.it && d.it.side);
   // splitter framåt: extra skada i en kon framför minan
@@ -224,7 +225,7 @@ export function updateDefense(dt){
   // granater och pansarvärnsrobotar i luften
   for (let i = DEF.shells.length - 1; i >= 0; i--){ const sh = DEF.shells[i]; sh.t -= dt;
     if (sh.m){ const k = 1 - Math.max(0, sh.t)/sh.T; sh.m.position.lerpVectors(sh.from, sh.to, k); if (sh.arc) sh.m.position.y += Math.sin(k*Math.PI)*sh.arc; }
-    if (sh.t <= 0){ if (sh.m) E.scene.remove(sh.m); DEF.shells.splice(i, 1); if (DEF.on){ PL.nextCause = sh.by; explode(sh.to, sh.r, sh.dmg, sh.k, sh.n, sh.breach, true, sh.side); } } }
+    if (sh.t <= 0){ if (sh.m) E.scene.remove(sh.m); DEF.shells.splice(i, 1); if (DEF.on){ PL.nextCause = sh.by; PL.nextW = sh.w; explode(sh.to, sh.r, sh.dmg, sh.k, sh.n, sh.breach, true, sh.side); } } }
   if (!DEF.on) return;
   DEF.alarm = Math.max(0, (DEF.alarm || 0) - dt);
   // minor och claymore laddas efter 0,5 s oavsett vem som äger dem (förut bara i spelarslingan, så egna utlöstes aldrig av fiendens AI)
@@ -280,7 +281,7 @@ function shoot(d, t){
     // granat i båge: landar efter 1,5–3 s med 2–5 m spridning
     const sp = 2 + dist*.03, to = new THREE.Vector3(t.x + (Math.random() - .5)*sp*2, 0, t.z + (Math.random() - .5)*sp*2); to.y = Math.max(hAt(to.x, to.z), T.sea) + .2;
     const m = new THREE.Mesh(new THREE.SphereGeometry(.07, 6, 4), gunMats().dark); m.position.copy(o); E.scene.add(m);
-    const T0 = 1.5 + dist/70; DEF.shells.push({ m, from: o.clone(), to, t: T0, T: T0, arc: 8 + dist*.15, r: d.g.splash, dmg: 380, k: .8, by: d.g.name, side: d.it && d.it.side });
+    const T0 = 1.5 + dist/70; DEF.shells.push({ m, from: o.clone(), to, t: T0, T: T0, arc: 8 + dist*.15, r: d.g.splash, dmg: 380, w: 'mortar', k: .8, by: d.g.name, side: d.it && d.it.side });
     d.M.fl.visible = true; d.M.L.intensity = 20; setTimeout(() => { d.M.fl.visible = false; d.M.L.intensity = 0; }, 60); sfx.boom && sfx.boom(.2, o.distanceTo(E.cam.position)); return;
   }
   const sp = d.g.spread*(1 + Math.min(2, t.v/3))*(t.crouch > .5 ? .8 : 1);
@@ -293,10 +294,10 @@ function shoot(d, t){
     // pansarvärnsrobot: flyger till första träffen och spränger – spränger hål i väggar
     const to = h ? new THREE.Vector3(h.point.x, h.point.y, h.point.z) : start.clone().addScaledVector(dir, d.g.range), m = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, .5, 6).rotateX(Math.PI/2), ROCKM || (ROCKM = new THREE.MeshBasicMaterial({ color: 0xffb070 })));
     m.position.copy(start); m.lookAt(to); E.scene.add(m); const T0 = Math.max(.15, to.distanceTo(start)/120);
-    DEF.shells.push({ m, from: start.clone(), to, t: T0, T: T0, r: d.g.splash, dmg: 650, k: 1, n: h ? new THREE.Vector3(h.normal.x, h.normal.y, h.normal.z) : null, breach: !!(h && h.owner && h.owner.b), by: d.g.name, side: d.it && d.it.side });
+    DEF.shells.push({ m, from: start.clone(), to, t: T0, T: T0, r: d.g.splash, dmg: 650, w: 'atgm', k: 1, n: h ? new THREE.Vector3(h.normal.x, h.normal.y, h.normal.z) : null, breach: !!(h && h.owner && h.owner.b), by: d.g.name, side: d.it && d.it.side });
     return;
   }
-  if (d.g.splash && h){ const hp = new THREE.Vector3(h.point.x, h.point.y, h.point.z); setTimeout(() => { if (DEF.on){ PL.nextCause = d.g.name; explode(hp, d.g.splash, 120, .3, null, false, true, d.it && d.it.side); } }, Math.min(400, dist*4)); }
+  if (d.g.splash && h){ const hp = new THREE.Vector3(h.point.x, h.point.y, h.point.z); setTimeout(() => { if (DEF.on){ PL.nextCause = d.g.name; PL.nextW = 'akan'; explode(hp, d.g.splash, 120, .3, null, false, true, d.it && d.it.side); } }, Math.min(400, dist*4)); }
   if (!h) return; const p = h.point, n = h.normal;
   if (h.owner && h.owner.player){ PL.hp -= d.g.dmg; PL.dmgT = .8; PL.hurtFrom = { x: d.pos.x, z: d.pos.z, t: 1.2 }; PL.lastHit = { by: d.g.name, x: d.pos.x, z: d.pos.z }; PL.shake = Math.max(PL.shake || 0, .15); return; }
   if (t.onHit && t.col && h.col.handle === t.col.handle){ t.onHit(d.g.dmg, d); return; }

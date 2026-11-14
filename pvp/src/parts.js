@@ -179,7 +179,7 @@ export function updateParts(dt){
       const B = it.b, alive = B.cells.reduce((a, c) => a + (c.alive ? 1 : 0), 0);
       // online avgör bara värden när förrådet smäller (de andra får sprängningen från värden)
       if ((B.collapsed > 0 || alive < B.cells.length*.67) && !(NETHOOK.boom && NETHOOK.host === false)){
-        it.boomed = true; PL.nextCause = 'AMMUNITIONSFÖRRÅD';
+        it.boomed = true; PL.nextCause = 'AMMUNITIONSFÖRRÅD'; PL.nextW = 'ammo';
         explode(new THREE.Vector3(it.x, it.y + 1.5, it.z), 6, 900, 1.6, null, false, true, it.side);
       }
     }

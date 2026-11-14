@@ -182,9 +182,11 @@ function shoot(b, t){
 }
 
 // samlingspunkt för ett lags anfall: på linjen fiendens högkvarter → egen startplats, strax utom försvarens räckvidd
-function rallyPoint(team, hqB){
+function rallyPoint(team, hqB, b){
   const sp = BOTS.spawns[team], S = hqB.s, dx = sp.x - S.x, dz = sp.z - S.z, L = Math.hypot(dx, dz) || 1, d = Math.min((DEF.maxRange || 85) + 8, L - 6);
-  return { x: S.x + dx/L*d, z: S.z + dz/L*d, key: team + Math.round(d) };
+  // varje soldat har sin egen plats i en linje tvärs anfallsriktningen (−24…+24 m), så att vågen anfaller från flera håll
+  const off = b ? ((b.k5 ?? (b.k5 = (parseInt(String(b.id).slice(1)) || 0) % 5)) - 2)*12 : 0;
+  return { x: S.x + dx/L*d - dz/L*off, z: S.z + dz/L*d + dx/L*off, key: team + Math.round(d) + ':' + off };
 }
 // ── beslut ────────────────────────────────────────────────────────────────
 function goalFor(b){
@@ -203,7 +205,7 @@ function think(b, dt){
     // anfallare pressar mot högkvarteret: de tar bara strid med fiender på nära håll (förut fastnade båda lagen i eldstrid på mitten)
     // (men besvarar eld på full räckvidd en stund efter att ha blivit beskjutna)
     b.hurtT = Math.max(0, (b.hurtT || 0) - .35); const reach = b.role === 'attack' && !(b.hurtT > 0) ? Math.min(b.K.range, 45) : b.K.range;
-    for (const t of enemiesOf(b)){ const d = Math.hypot(t.x - b.pos.x, t.z - b.pos.z); if (d > (t.kind === 'def' ? b.K.range : reach) || d > bd) continue; if (canSee(b, t)){ best = t; bd = d; } }
+    for (const t of enemiesOf(b)){ const d = Math.hypot(t.x - b.pos.x, t.z - b.pos.z); if (d > (t.kind === 'def' ? b.K.range + (b.K.rocket ? 22 : 0) : reach) || d > bd) continue; if (canSee(b, t)){ best = t; bd = d; } }
     if (best && (!b.tgt || b.tgt.ref !== best.ref || b.tgt.kind !== best.kind)) b.seen = 0;
     b.tgt = best;
   }
@@ -224,14 +226,15 @@ function think(b, dt){
     // inom räckhåll av fiendens högkvarter: stanna och skjut på det (RPG spränger hål)
     if (!(b.charges > 0) && near < (b.K.rocket ? 45 : 22) && !b.tgt){ const hq = { kind: 'hq', x: G.b.s.x, y: G.b.origin.y + 2, z: G.b.s.z }; if (canSee(b, hq) || near < 6){ b.tgt = null; b.yaw = Math.atan2(hq.x - b.pos.x, hq.z - b.pos.z); b.cool -= dt; if (b.cool <= 0){ b.cool = b.K.rocket ? b.K.pause : .18; shoot(b, hq); } b.moving = false; return; } }
   } else if (near < 14 + (b.post || 0)){ b.moving = false; return; }
-  if (b.tgt && !G.attack){ b.moving = false; return; }
+  if (b.tgt && (!G.attack || (BOTS.holdFight && b.push && b.tgt.kind !== 'hq' && !(b.charges > 0 && near < 20)))){ b.moving = false; return; }
   // ANFALL I VÅGOR (som BF4): anfallarna samlas först utom räckhåll för fiendens försvar och går fram tillsammans
-  const R = G.attack && !b.push ? rallyPoint(b.team, G.b) : null;
+  const R = G.attack && !b.push ? rallyPoint(b.team, G.b, b) : null;
   if (R){ const dR = Math.hypot(b.pos.x - R.x, b.pos.z - R.z);
-    if (dR < 7){ b.moving = false; b.wait = (b.wait || 0) + dt; b.yaw = Math.atan2(G.b.s.x - b.pos.x, G.b.s.z - b.pos.z);
-      const grp = BOTS.list.filter(o => o.alive && o.team === b.team && o.role === 'attack' && !o.push && Math.hypot(o.pos.x - R.x, o.pos.z - R.z) < 7);
-      if (grp.length >= Math.min(3, BOTS.list.filter(o => o.alive && o.team === b.team && o.role === 'attack').length) || b.wait > 14){ for (const o of grp){ o.push = true; o.pathT = 0; o.wait = 0; } }
+    if (dR < 7){ b.moving = false; b.wait = (b.wait || 0) + dt; b.at = true; if (!b.tgt) b.yaw = Math.atan2(G.b.s.x - b.pos.x, G.b.s.z - b.pos.z);
+      const att = BOTS.list.filter(o => o.alive && o.team === b.team && o.role === 'attack'), grp = att.filter(o => !o.push && o.at);
+      if (grp.length >= Math.max(1, Math.min(att.length, Math.ceil(att.length*.6))) || b.wait > 20){ for (const o of grp){ o.push = true; o.at = false; o.pathT = 0; o.wait = 0; } }
       return; }
+    b.at = false;
     if (b.rallyFor !== R.key){ b.rallyFor = R.key; b.pathT = 0; } }
   b.pathT -= dt;
   if (R && b.pathT <= 0){ b.pathT = 2 + Math.random(); const N = BOTS.nav, cells = []; for (let dz = -3; dz <= 3; dz++) for (let dx = -3; dx <= 3; dx++){ const i = N.idx(R.x + dx, R.z + dz); if (i >= 0 && N.cost[i] !== 255) cells.push(i); } b.path = findPath(b.pos.x, b.pos.z, cells, null); b.pi = 0; if (!b.path){ b.push = true; b.pathT = 0; } }

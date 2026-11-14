@@ -134,7 +134,7 @@ function fire(dt){
 function fireRocket(o, d){
   const m = new THREE.Mesh(new THREE.ConeGeometry(.06, .3, 8), new THREE.MeshStandardMaterial({ color: 0x4a5a3a, emissive: 0xff8020, emissiveIntensity: .2 }));
   m.position.copy(o).addScaledVector(d, .8); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d); E.scene.add(m);
-  PL.rockets.push({ m, v: d.clone().multiplyScalar(70), t: 0 });
+  PL.rockets.push({ m, v: d.clone().multiplyScalar(70), t: 0, o: o.clone() });
 }
 function throwNade(){
   if (PL.gad.gren <= 0) return; PL.gad.gren--; const [o, d] = aimRay();
@@ -153,12 +153,12 @@ function placeCharge(kind){
   const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: kind === 'breach' ? 0x3a3f2a : 0x6a5a3a, roughness: .8 }));
   m.position.set(h.point.x, h.point.y, h.point.z).addScaledVector(n, .03); m.lookAt(m.position.clone().add(n)); m.castShadow = true; E.scene.add(m);
   const led = new THREE.Mesh(new THREE.SphereGeometry(.02, 6, 5), new THREE.MeshBasicMaterial({ color: 0xff2010 })); led.position.z = .05; m.add(led);
-  PL.charges.push({ kind, m, p: new THREE.Vector3(h.point.x, h.point.y, h.point.z), n }); sfx.click(); msg(kind === 'breach' ? 'Sprängladdning placerad – [F] spräng' : 'C4 placerad – [F] spräng');
+  PL.charges.push({ kind, m, p: new THREE.Vector3(h.point.x, h.point.y, h.point.z), n }); if (NETHOOK.plant) NETHOOK.plant(kind, PL.charges[PL.charges.length - 1].p.clone().addScaledVector(n, -.3)); sfx.click(); msg(kind === 'breach' ? 'Sprängladdning placerad – [F] spräng' : 'C4 placerad – [F] spräng');
 }
 function detonate(){
   if (!PL.charges.length) return;
   for (const c of PL.charges){ E.scene.remove(c.m); const p = c.p.clone().addScaledVector(c.n, -.3);
-    if (c.kind === 'breach') explode(p, 1.3, 1700, .7, c.n, true, true, 'pl'); else explode(p, 2.4, 2600, 1.3, c.n, false, true, 'pl'); }
+    PL.nextW = c.kind === 'breach' ? 'breach' : 'c4'; if (c.kind === 'breach') explode(p, 1.3, 1700, .7, c.n, true, true, 'pl'); else explode(p, 2.4, 2600, 1.3, c.n, false, true, 'pl'); }
   PL.charges.length = 0;
 }
 // nätverkskrokar (sätts av net.js): mina sprängningar och skott på byggnader skickas till de andra spelarna
@@ -166,7 +166,10 @@ export const NETHOOK = { boom: null, cell: null, applying: false, host: null };
 export function explode(p, r, dmg, k, n, breach, net, team, seed){
   // online: sprängningens slump styrs av ett frö som följer med i nätverket, så att samma celler förstörs hos alla
   if (seed == null && net && NETHOOK.boom) seed = (Math.random()*2147483647) | 0;
-  if (net && NETHOOK.boom) NETHOOK.boom(p, r, dmg, k, n, breach, seed, team);
+  // vapnet (w) följer med så att servern kan kontrollera sprängningen mot vapnets profil
+  // skjutpositionen (o) följer med för RPG så att värden kontrollerar sikten därifrån, inte från där skytten står nu
+  const w = PL.nextW, o = PL.nextO; PL.nextW = PL.nextO = null;
+  if (net && NETHOOK.boom) NETHOOK.boom(p, r, dmg, k, n, breach, seed, team, w, o);
   if (seed != null){ let s = (seed >>> 0) || 1; const R0 = Math.random; Math.random = () => (s = (s*16807) % 2147483647)/2147483647; try { blast(p, r, dmg, breach); } finally { Math.random = R0; } } else blast(p, r, dmg, breach); fx.explosion(p.x, p.y, p.z, k); sfx.boom(k, p.distanceTo(E.cam.position));
   const h = ray({ x: p.x, y: p.y + .5, z: p.z }, { x: 0, y: -1, z: 0 }, 1.5); if (h) fx.decal('scorch', h.point, h.normal, 2.4*k);
   // brännmärke bara på en yta som finns kvar efter sprängningen
@@ -202,7 +205,8 @@ export function updatePlayer(dt){
   if (mv.y > PL.vy*dt + .001 && PL.vy > 0) PL.vy = 0;
   const nt = { x: t.x + mv.x, y: t.y + mv.y, z: t.z + mv.z }; PL.body.setNextKinematicTranslation(nt);
   PL.speed = Math.hypot(PL.vx, PL.vz); PL.bob += dt*PL.speed*(PL.sprint ? 1.4 : 1.8);
-  if (nt.y < -30) initPlayer({ ...PL.spawn, re: true });
+  // föll ut ur världen: räknas som en vanlig död (dödsskärm, 'dead' online, ammunition fylls på först vid återuppståndelsen)
+  if (nt.y < -30 && PL.hp > 0){ PL.hp = 0; PL.lastHit = { by: 'FALL' }; }
   // kamera
   const eyeH = 1.55 - .55*PL.crouch, sh = PL.shake || 0; PL.shake = Math.max(0, sh - dt*1.8);
   E.cam.position.set(nt.x + (Math.random() - .5)*sh*.12, nt.y + eyeH - .55 + Math.sin(PL.bob*2)*.025*Math.min(1, PL.speed/4), nt.z + (Math.random() - .5)*sh*.12);
@@ -224,13 +228,13 @@ export function updatePlayer(dt){
     const r = PL.rockets[i]; r.t += dt; const step = r.v.clone().multiplyScalar(dt), len = step.length(), dir = step.clone().normalize();
     const h = ray(r.m.position, dir, len, PL.col);
     fx.smoke(r.m.position.x, r.m.position.y, r.m.position.z, .25, false); fx.fire(r.m.position.x, r.m.position.y, r.m.position.z, .25);
-    if (h || r.t > 4){ const p = h ? new THREE.Vector3(h.point.x, h.point.y, h.point.z) : r.m.position.clone(); E.scene.remove(r.m); PL.rockets.splice(i, 1); explode(p, 2.2, 1500, 1.2, h ? new THREE.Vector3(h.normal.x, h.normal.y, h.normal.z) : null, false, true, 'pl'); continue; }
+    if (h || r.t > 4){ const p = h ? new THREE.Vector3(h.point.x, h.point.y, h.point.z) : r.m.position.clone(); E.scene.remove(r.m); PL.rockets.splice(i, 1); PL.nextW = 'rpg'; PL.nextO = r.o; explode(p, 2.2, 1500, 1.2, h ? new THREE.Vector3(h.normal.x, h.normal.y, h.normal.z) : null, false, true, 'pl'); continue; }
     r.m.position.add(step); r.v.y -= 1.5*dt;
   }
   // granater
   for (let i = PL.nades.length - 1; i >= 0; i--){
     const g = PL.nades[i], tr = g.b.translation(); g.m.position.set(tr.x, tr.y, tr.z); g.t -= dt;
-    if (g.t <= 0){ E.scene.remove(g.m); w.removeRigidBody(g.b); PL.nades.splice(i, 1); explode(new THREE.Vector3(tr.x, tr.y + .1, tr.z), 3.2, 340, .8, null, false, true, 'pl'); }
+    if (g.t <= 0){ E.scene.remove(g.m); w.removeRigidBody(g.b); PL.nades.splice(i, 1); PL.nextW = 'gren'; explode(new THREE.Vector3(tr.x, tr.y + .1, tr.z), 3.2, 340, .8, null, false, true, 'pl'); }
   }
   if (PL.hp < 100) PL.hp = Math.min(100, PL.hp + dt*(PL.dmgT > 0 ? 0 : 6)); PL.dmgT = Math.max(0, (PL.dmgT || 0) - dt);
   if (PL.hp <= 0){ PL.hp = 0; PL.deadT = 4; PL.deadY = E.cam.position.y - 1.2; const t = PL.body.translation(), L = PL.lastHit || { by: 'OKÄND' }; PL.death = { by: L.by, d: L.x != null ? Math.round(Math.hypot(L.x - t.x, L.z - t.z)) : null }; if (PL.vm) PL.vm.visible = false; PL.msg = null; return; }

@@ -83,7 +83,7 @@ function loop(now){
 G.run = (sec, dt = 1/60) => { const t0 = performance.now(); for (let i = 0; i < sec/dt; i++) frame(dt, i < sec/dt - 1); return Math.round(performance.now() - t0); };
 // test: spara bilden till tester/shots/<namn>.jpg via servern i Blender
 G.shot = async (name) => { G.run(.02); const c = $('c'), o = document.createElement('canvas'); o.width = 960; o.height = Math.round(960*c.height/c.width); o.getContext('2d').drawImage(c, 0, 0, o.width, o.height); const r = await fetch('/save?name=' + name, { method: 'POST', body: o.toDataURL('image/jpeg', .85) }); return r.status; };
-G.DEF = DEF; G.DEV = DEV; G.BOTS = BOTS; G.MATCH = MATCH; G.setup = setup; G.NET = NET; G.dev = setDev; G.build = build; G.BD = BD; G.testBase = b => testBase(b); G.start = (k) => { document.querySelector('.it').click(); [...document.querySelectorAll('.it')][k || 2].click(); };
+G.DEF = DEF; G.DEV = DEV; G.BOTS = BOTS; G.MATCH = MATCH; G.setup = setup; G.NET = NET; G.dev = setDev; G.build = build; G.BD = BD; G.testBase = b => testBase(b); G.start = (k) => { menu('play'); const its = [...document.querySelectorAll('#menu .it')]; (k != null ? its[k] : its.find(e => e.textContent.startsWith('ÖVNING'))).click(); };
 G.tp = (x, z, yaw, pitch) => { PL.body.setTranslation({ x, y: 1.2, z }, true); PL.yaw = yaw || 0; PL.pitch = pitch || 0; };
 function frame(dt, skipDraw){
   if (G.state === 'menu' && W.map === 'training'){ // långsam kameraåkning runt höghuset bakom menyn
